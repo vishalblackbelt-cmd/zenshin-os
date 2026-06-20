@@ -1,0 +1,41 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: 'npm'
+
+    - name: Install Monorepo Dependencies
+      run: npm install --legacy-peer-deps
+
+    - name: Validate Prisma Schema
+      run: |
+        cd packages/db
+        DATABASE_URL="postgresql://postgres:postgres@localhost:5432/zenshin" npx prisma validate
+
+    - name: Build DB Package
+      run: npm run build -w packages/db
+
+    - name: Build API Package
+      run: npm run build -w apps/api
+
+    - name: Build Web Application
+      run: npm run build -w apps/web
+
+    - name: Run Integration Tests
+      run: npm run test -w apps/api

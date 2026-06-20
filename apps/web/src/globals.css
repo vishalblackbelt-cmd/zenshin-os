@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  font-family: 'Outfit', sans-serif;
+  font-size: 16px;
+}
+
+
+/* Custom styles for animations and themes */
+:root {
+  --bg-primary: #030712;
+  --bg-secondary: #0b0f19;
+  --bg-tertiary: #111827;
+  --border-muted: #1f2937;
+  --border-glow: rgba(139, 92, 246, 0.15);
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-muted: #9ca3af;
+  --accent-primary: #8b5cf6; /* Radiant Violet */
+  --accent-secondary: #06b6d4; /* Cyber Cyan */
+  --accent-danger: #ef4444;
+  --accent-warning: #f59e0b;
+  --accent-success: #10b981;
+}
+
+/* Shogun Red Theme */
+.theme-red {
+  --bg-primary: #0c0707;
+  --bg-secondary: #160e0e;
+  --bg-tertiary: #221515;
+  --border-muted: #3a2222;
+  --border-glow: rgba(239, 68, 68, 0.15);
+  --text-primary: #fdfafb;
+  --text-secondary: #ebd3d3;
+  --text-muted: #c5a0a0;
+  --accent-primary: #ef4444; /* Shogun Crimson */
+  --accent-secondary: #f97316; /* Sunburst Orange */
+  --accent-danger: #ef4444;
+  --accent-warning: #f97316;
+  --accent-success: #10b981;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.glass-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glow);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+}
+
+.glow-btn {
+  box-shadow: 0 0 15px var(--border-glow);
+  transition: all 0.3s ease;
+}
+.glow-btn:hover {
+  box-shadow: 0 0 25px var(--accent-primary);
+}
