@@ -35,7 +35,7 @@ export async function seedInitialDatabase() {
       await prisma.user.create({
         data: {
           email: 'owner@zenshin.com',
-          name: 'Sensei Vikram Singh',
+          name: 'Shihan Vishal jaiswal',
           password: hashedPassword,
           role: 'OWNER',
           branchId: null

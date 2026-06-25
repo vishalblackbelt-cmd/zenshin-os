@@ -20,7 +20,8 @@ import {
   Sun, 
   Moon,
   Info,
-  Lock
+  Lock,
+  LogOut
 } from 'lucide-react';
 
 
@@ -110,105 +111,33 @@ const INITIAL_SETTINGS: SystemSettings = {
   reactivationCharge: 1000
 };
 
-const INITIAL_STUDENTS: Student[] = [
-  {
-    id: 'ZD0001',
-    name: 'Aarav Sharma',
-    age: 12,
-    category: 'Kids',
-    parentName: 'Ramesh Sharma',
-    mobile: '9876543210',
-    branch: 'Sirifort',
-    joiningDate: '2025-01-15',
-    currentBelt: 'Yellow Belt',
-    status: 'ACTIVE',
-    feeDueDate: '2026-06-25',
-    examEligible: true,
-    outstandingBalance: 0,
-    attendanceRate: 92
-  },
-  {
-    id: 'ZD0002',
-    name: 'Kabir Mehta',
-    age: 8,
-    category: 'Kids',
-    parentName: 'Sanjay Mehta',
-    mobile: '9811223344',
-    branch: 'Sirifort',
-    joiningDate: '2025-03-10',
-    currentBelt: 'White Belt',
-    status: 'INACTIVE', // Suspended
-    feeDueDate: '2026-06-05', // 15 days overdue (more than 10 day grace)
-    examEligible: false,
-    outstandingBalance: 4600, // ₹3600 fee + ₹1000 reactivation fee
-    attendanceRate: 65
-  },
-  {
-    id: 'AD0001',
-    name: 'Rohan Verma',
-    age: 16,
-    category: 'Teens',
-    parentName: 'Alok Verma',
-    mobile: '9988776655',
-    branch: 'Asiad',
-    joiningDate: '2024-09-01',
-    currentBelt: 'Green Belt',
-    status: 'ACTIVE',
-    feeDueDate: '2026-06-18', // 2 days overdue (within grace period)
-    examEligible: true,
-    outstandingBalance: 3600,
-    attendanceRate: 88
-  },
-  {
-    id: 'AD0002',
-    name: 'Ananya Goel',
-    age: 24,
-    category: 'Adults',
-    parentName: 'Rajesh Goel',
-    mobile: '9555667788',
-    branch: 'Asiad',
-    joiningDate: '2023-11-20',
-    currentBelt: 'Brown Belt',
-    status: 'ACTIVE',
-    feeDueDate: '2026-07-05',
-    examEligible: true,
-    outstandingBalance: 0,
-    attendanceRate: 95
-  }
-];
+const INITIAL_STUDENTS: Student[] = [];
 
-const INITIAL_TRIALS: TrialLead[] = [
-  { id: 'T001', name: 'Ishaan Gupta', mobile: '9123456789', branch: 'Sirifort', status: 'PAID', paidAmount: 500, createdAt: '2026-06-15' },
-  { id: 'T002', name: 'Meera Sen', mobile: '9234567890', branch: 'Asiad', status: 'NEW', paidAmount: 0, createdAt: '2026-06-18' },
-  { id: 'T003', name: 'Dev Malik', mobile: '9345678901', branch: 'Sirifort', status: 'JOINED', paidAmount: 500, createdAt: '2026-06-10' },
-  { id: 'T004', name: 'Riya Singhal', mobile: '9456789012', branch: 'Asiad', status: 'LOST', paidAmount: 0, createdAt: '2026-06-08' }
-];
+const INITIAL_TRIALS: TrialLead[] = [];
 
-const INITIAL_LEDGER: LedgerEntry[] = [
-  { id: 'L001', studentId: 'ZD0001', studentName: 'Aarav Sharma', type: 'CHARGE', amount: 3600, description: 'Monthly Fee - June 2026', createdAt: '2026-06-01 08:00:00' },
-  { id: 'L002', studentId: 'ZD0001', studentName: 'Aarav Sharma', type: 'PAYMENT', amount: 3600, description: 'Cash Payment Received', createdAt: '2026-06-02 17:30:00' },
-  
-  { id: 'L003', studentId: 'ZD0002', studentName: 'Kabir Mehta', type: 'CHARGE', amount: 3600, description: 'Monthly Fee - June 2026', createdAt: '2026-06-01 08:00:00' },
-  { id: 'L004', studentId: 'ZD0002', studentName: 'Kabir Mehta', type: 'CHARGE', amount: 1000, description: 'Reactivation Fee (Suspension)', createdAt: '2026-06-15 00:01:00' },
+const INITIAL_LEDGER: LedgerEntry[] = [];
 
-  { id: 'L005', studentId: 'AD0001', studentName: 'Rohan Verma', type: 'CHARGE', amount: 3600, description: 'Monthly Fee - June 2026', createdAt: '2026-06-01 08:00:00' },
-  
-  { id: 'L006', studentId: 'AD0002', studentName: 'Ananya Goel', type: 'CHARGE', amount: 3600, description: 'Monthly Fee - June 2026', createdAt: '2026-06-01 08:00:00' },
-  { id: 'L007', studentId: 'AD0002', studentName: 'Ananya Goel', type: 'PAYMENT', amount: 3600, description: 'UPI Payment Received', createdAt: '2026-06-01 10:15:00' }
-];
+const INITIAL_AUDIT: AuditLog[] = [];
 
-const INITIAL_AUDIT: AuditLog[] = [
-  { id: 'A001', timestamp: '2026-06-20 02:00:00', actor: 'Vikram Singh', role: 'OWNER', action: 'LOGIN', details: 'Owner logged in successfully.', branch: 'GLOBAL' },
-  { id: 'A002', timestamp: '2026-06-19 18:30:00', actor: 'Anjali Sen', role: 'MANAGER', action: 'ATTENDANCE_MARKED', details: 'Attendance marked for Sirifort Kids batch.', branch: 'Sirifort' },
-  { id: 'A003', timestamp: '2026-06-15 00:01:00', actor: 'CRON_SYSTEM', role: 'OWNER', action: 'STUDENT_SUSPENDED', details: 'Student ZD0002 suspended automatically due to 10-day overdue payment.', branch: 'Sirifort' },
-  { id: 'A004', timestamp: '2026-06-15 00:01:00', actor: 'CRON_SYSTEM', role: 'OWNER', action: 'WHATSAPP_REMOVED', details: 'Suspended student ZD0002 removed from whatsapp lists.', branch: 'Sirifort' }
-];
+const INITIAL_TIMELINE: TimelineEvent[] = [];
 
-const INITIAL_TIMELINE: TimelineEvent[] = [
-  { id: 'E001', studentId: 'ZD0002', date: '2026-05-31', type: 'FRIENDLY_REMINDER_SENT', description: 'Friendly Reminder sent: Fee due on 2026-06-05' },
-  { id: 'E002', studentId: 'ZD0002', date: '2026-06-10', type: 'OVERDUE_REMINDER_SENT', description: 'Overdue Warning sent: Fee overdue by 5 days' },
-  { id: 'E003', studentId: 'ZD0002', date: '2026-06-15', type: 'STUDENT_SUSPENDED', description: 'Student status updated to Suspended (INACTIVE) & Reactivation fee of ₹1000 charged' },
-  { id: 'E004', studentId: 'ZD0001', date: '2026-06-02', type: 'PAYMENT_RECEIVED', description: 'Fee payment of ₹3600 recorded' }
+// Clear old localStorage mock data if it hasn't been cleared yet for v1.3 release
+if (typeof window !== 'undefined' && !localStorage.getItem('zenshin-v1.3-initialized')) {
+  localStorage.removeItem('zenshin-students');
+  localStorage.removeItem('zenshin-trials');
+  localStorage.removeItem('zenshin-ledger');
+  localStorage.removeItem('zenshin-audit');
+  localStorage.removeItem('zenshin-timeline');
+  localStorage.removeItem('zenshin-session');
+  localStorage.setItem('zenshin-v1.3-initialized', 'true');
+}
+
+const VALID_USERS = [
+  { email: 'owner@zenshin.com', password: 'password123', name: 'Shihan Vishal jaiswal', role: 'OWNER' as Role, branch: null },
+  { email: 'admin', password: 'password123', name: 'Shihan Vishal jaiswal', role: 'OWNER' as Role, branch: null },
+  { email: 'sirifort@zenshin.com', password: 'password123', name: 'Anjali Sen (Sirifort Manager)', role: 'MANAGER' as Role, branch: 'Sirifort' as Branch },
+  { email: 'asiad@zenshin.com', password: 'password123', name: 'Rohan Verma (Asiad Manager)', role: 'MANAGER' as Role, branch: 'Asiad' as Branch },
+  { email: 'instructor@zenshin.com', password: 'password123', name: 'Coach Karan Dev', role: 'INSTRUCTOR' as Role, branch: 'Sirifort' as Branch },
 ];
 
 // Helper to seed localStorage
@@ -232,14 +161,14 @@ export default function App() {
   });
 
   // User auth state
-  const [currentSession, setCurrentSession] = useState<UserSession>(() => {
-    return loadFromStorage<UserSession>('zenshin-session', {
-      id: 'U001',
-      name: 'Sensei Vikram Singh',
-      role: 'OWNER',
-      branch: null // Global
-    });
+  const [currentSession, setCurrentSession] = useState<UserSession | null>(() => {
+    return loadFromStorage<UserSession | null>('zenshin-session', null);
   });
+
+  // Login UI states
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   // DB States
   const [students, setStudents] = useState<Student[]>(() => loadFromStorage('zenshin-students', INITIAL_STUDENTS));
@@ -329,8 +258,8 @@ export default function App() {
     const newLog: AuditLog = {
       id: 'A' + Math.floor(Math.random() * 10000),
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      actor: currentSession.name,
-      role: currentSession.role,
+      actor: currentSession?.name || 'SYSTEM',
+      role: currentSession?.role || 'OWNER',
       action,
       details,
       branch
@@ -352,13 +281,13 @@ export default function App() {
 
   // Check RBAC Permissions
   const canPerform = (requiredRoles: Role[]) => {
-    return requiredRoles.includes(currentSession.role);
+    return currentSession ? requiredRoles.includes(currentSession.role) : false;
   };
 
   // Filters students by current active branch and permissions
   const getFilteredStudents = () => {
     // If manager, enforce branch lockdown
-    const branchToFilter = currentSession.role === 'MANAGER' && currentSession.branch 
+    const branchToFilter = currentSession?.role === 'MANAGER' && currentSession?.branch 
       ? currentSession.branch 
       : activeBranch;
 
@@ -690,7 +619,7 @@ export default function App() {
 
   // Quick switch mock profiles
   const switchUserSession = (role: Role) => {
-    let name = 'Sensei Vikram Singh';
+    let name = 'Shihan Vishal jaiswal';
     let branch: Branch | null = null;
     if (role === 'MANAGER') {
       name = 'Anjali Sen (Sirifort Manager)';
@@ -705,8 +634,63 @@ export default function App() {
       name = 'Aarav Sharma (Student)';
       branch = 'Sirifort';
     }
-    setCurrentSession({ id: 'U' + Math.floor(Math.random() * 1000), name, role, branch });
+    const sessionData = { id: 'U' + Math.floor(Math.random() * 1000), name, role, branch };
+    setCurrentSession(sessionData);
+    saveToStorage('zenshin-session', sessionData);
     logAudit('SESSION_SWITCH', `Switched active login role to ${role}`, branch || 'GLOBAL');
+  };
+
+  // Login handler
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const user = VALID_USERS.find(
+      u => (u.email.toLowerCase() === loginEmail.toLowerCase()) && u.password === loginPassword
+    );
+    if (user) {
+      const sessionData = {
+        id: 'U' + Math.floor(Math.random() * 1000),
+        name: user.name,
+        role: user.role,
+        branch: user.branch
+      };
+      setCurrentSession(sessionData);
+      saveToStorage('zenshin-session', sessionData);
+      setLoginEmail('');
+      setLoginPassword('');
+      setLoginError('');
+      
+      // Seed an initial audit log entry for the login
+      const newLog: AuditLog = {
+        id: 'A' + Math.floor(Math.random() * 10000),
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        actor: user.name,
+        role: user.role,
+        action: 'LOGIN',
+        details: `${user.role} logged in successfully.`,
+        branch: user.branch || 'GLOBAL'
+      };
+      setAuditLogs(prev => [newLog, ...prev]);
+    } else {
+      setLoginError('Invalid User ID or Password.');
+    }
+  };
+
+  // Logout handler
+  const handleLogout = () => {
+    if (currentSession) {
+      const newLog: AuditLog = {
+        id: 'A' + Math.floor(Math.random() * 10000),
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        actor: currentSession.name,
+        role: currentSession.role,
+        action: 'LOGOUT',
+        details: `${currentSession.role} logged out successfully.`,
+        branch: currentSession.branch || 'GLOBAL'
+      };
+      setAuditLogs(prev => [newLog, ...prev]);
+    }
+    localStorage.removeItem('zenshin-session');
+    setCurrentSession(null);
   };
 
   // ==========================================
@@ -715,12 +699,12 @@ export default function App() {
   
   // Calculate dashboard stats
   const getStats = () => {
-    const targetStudents = students.filter(s => currentSession.role === 'MANAGER' && currentSession.branch 
+    const targetStudents = students.filter(s => currentSession?.role === 'MANAGER' && currentSession?.branch 
       ? s.branch === currentSession.branch 
       : s.branch === activeBranch
     );
 
-    const targetTrials = trials.filter(t => currentSession.role === 'MANAGER' && currentSession.branch
+    const targetTrials = trials.filter(t => currentSession?.role === 'MANAGER' && currentSession?.branch
       ? t.branch === currentSession.branch
       : t.branch === activeBranch
     );
@@ -773,6 +757,111 @@ export default function App() {
 
   const stats = getStats();
 
+  if (!currentSession) {
+    return (
+      <div className="min-h-screen text-slate-100 flex flex-col items-center justify-center p-6 antialiased bg-[var(--bg-primary)] animate-fadeIn">
+        {/* Elegant top right floating theme toggle */}
+        <div className="absolute top-6 right-6">
+          <button
+            onClick={() => setTheme(prev => prev === 'dark' ? 'red' : 'dark')}
+            className="p-2.5 rounded-lg border border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] transition-all hover:text-[var(--text-primary)]"
+          >
+            {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4 text-orange-400" />}
+          </button>
+        </div>
+
+        <div className="w-full max-w-md glass-card rounded-2xl p-8 border border-[var(--border-glow)] flex flex-col gap-6 shadow-2xl relative overflow-hidden transition-all duration-300">
+          
+          {/* Subtle colored glow blur in background */}
+          <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full bg-[var(--accent-primary)] opacity-10 blur-3xl pointer-events-none"></div>
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full bg-[var(--accent-secondary)] opacity-10 blur-3xl pointer-events-none"></div>
+
+          {/* Logo / Title */}
+          <div className="flex flex-col items-center text-center gap-2">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[var(--accent-primary)] to-[var(--accent-secondary)] flex items-center justify-center shadow-lg shadow-violet-500/20 mb-2 animate-bounce">
+              <span className="font-extrabold text-2xl text-slate-900 font-mono tracking-tighter">禅</span>
+            </div>
+            <div>
+              <div className="flex items-center justify-center gap-2">
+                <h1 className="text-2xl font-black tracking-wider text-[var(--text-primary)]">ZENSHIN OS</h1>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/20">
+                  v1.3 RC-1
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Shotokan Karate Academy ERP Portal</p>
+            </div>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            {loginError && (
+              <div className="p-3 rounded-lg border border-red-500/20 bg-red-950/20 text-red-400 text-xs font-semibold flex items-center gap-2 animate-pulse">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1.5">User ID / Email</label>
+              <input
+                type="text"
+                required
+                placeholder="owner@zenshin.com"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] placeholder:text-slate-600 focus:outline-none focus:border-[var(--accent-primary)] transition-all font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1.5">Password</label>
+              <input
+                type="password"
+                required
+                placeholder="••••••••"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] placeholder:text-slate-600 focus:outline-none focus:border-[var(--accent-primary)] transition-all font-mono"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-gradient-to-tr from-[var(--accent-primary)] to-[var(--accent-secondary)] hover:opacity-90 active:scale-[0.98] text-slate-950 font-black text-sm rounded-xl transition-all shadow-lg shadow-violet-500/20 glow-btn"
+            >
+              Sign In to Portal
+            </button>
+          </form>
+
+          {/* Hint details */}
+          <div className="border-t border-[var(--border-muted)] pt-4 text-center">
+            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-2">Predefined Portal Roles</span>
+            <div className="grid grid-cols-2 gap-2 text-[10px] text-[var(--text-muted)] font-semibold">
+              <div className="bg-[var(--bg-secondary)] border border-[var(--border-muted)] p-2 rounded-lg">
+                <p className="text-[var(--text-primary)] font-bold">System Owner</p>
+                <code className="text-amber-400">owner@zenshin.com</code>
+              </div>
+              <div className="bg-[var(--bg-secondary)] border border-[var(--border-muted)] p-2 rounded-lg">
+                <p className="text-[var(--text-primary)] font-bold">Sirifort Manager</p>
+                <code className="text-amber-400">sirifort@zenshin.com</code>
+              </div>
+              <div className="bg-[var(--bg-secondary)] border border-[var(--border-muted)] p-2 rounded-lg">
+                <p className="text-[var(--text-primary)] font-bold">Asiad Manager</p>
+                <code className="text-amber-400">asiad@zenshin.com</code>
+              </div>
+              <div className="bg-[var(--bg-secondary)] border border-[var(--border-muted)] p-2 rounded-lg">
+                <p className="text-[var(--text-primary)] font-bold">Instructor</p>
+                <code className="text-amber-400">instructor@zenshin.com</code>
+              </div>
+            </div>
+            <p className="text-[9px] text-[var(--text-muted)] mt-3">Default Password for all: <code className="text-amber-400 font-bold">password123</code></p>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen text-slate-100 flex flex-col antialiased">
       
@@ -824,7 +913,7 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-3">
             
             {/* Global Settings Trigger - OWNER Only */}
-            {currentSession.role === 'OWNER' && (
+            {currentSession?.role === 'OWNER' && (
               <button 
                 onClick={() => {
                   alert(`Settings Configs:\nGrace Period: ${settings.maxGracePeriod} days\nReactivation Fee: ₹${settings.reactivationCharge}\nConfigure directly under the Accounting Ledger tab.`);
@@ -844,7 +933,7 @@ export default function App() {
                   key={r}
                   onClick={() => switchUserSession(r)}
                   className={`px-2 py-1 rounded text-[10px] font-bold font-mono transition-all ${
-                    currentSession.role === r 
+                    currentSession?.role === r 
                       ? 'bg-[var(--accent-primary)] text-slate-950 shadow-md' 
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
@@ -857,7 +946,7 @@ export default function App() {
             {/* Branch Switcher (Locked if Manager) */}
             <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] p-1 rounded-lg border border-[var(--border-muted)]">
               {(['Sirifort', 'Asiad'] as Branch[]).map(b => {
-                const isLocked = currentSession.role === 'MANAGER' && currentSession.branch !== b;
+                const isLocked = currentSession?.role === 'MANAGER' && currentSession?.branch !== b;
                 return (
                   <button
                     key={b}
@@ -888,10 +977,20 @@ export default function App() {
             <div className="flex items-center gap-2 pl-2 border-l border-[var(--border-muted)]">
               <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
               <div className="text-right">
-                <p className="text-xs font-semibold text-[var(--text-primary)]">{currentSession.name}</p>
-                <p className="text-[10px] text-[var(--text-muted)] font-mono">{currentSession.role} Mode</p>
+                <p className="text-xs font-semibold text-[var(--text-primary)]">{currentSession?.name}</p>
+                <p className="text-[10px] text-[var(--text-muted)] font-mono">{currentSession?.role} Mode</p>
               </div>
             </div>
+
+            {/* Log Out button */}
+            <button
+              onClick={handleLogout}
+              className="p-2.5 rounded-lg border border-[var(--border-muted)] hover:bg-red-500/10 hover:text-red-400 text-[var(--text-muted)] transition-all flex items-center justify-center gap-1.5"
+              title="Log Out"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline text-xs font-bold">Logout</span>
+            </button>
 
           </div>
 
