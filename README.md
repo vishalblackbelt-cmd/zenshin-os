@@ -78,9 +78,11 @@ The application will be accessible at:
 
 The `docker-compose.dev.yml` override is optional, but necessary if you want containerized development behavior (watch mode + HMR). If you do not need Docker for development, use `npm run dev` locally.
 
+The dev override uses dedicated development images for API and Web plus separate `node_modules` volumes per service to avoid dependency corruption/race conditions during startup.
+
 If you previously built old images/volumes and still see Prisma/OpenSSL errors, reset and rebuild:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v --remove-orphans
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
