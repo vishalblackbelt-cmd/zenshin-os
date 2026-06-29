@@ -5,8 +5,8 @@ services:
       dockerfile: apps/api/Dockerfile.dev
     environment:
       DATABASE_URL: "postgresql://postgres:postgres@db:5432/zenshin?schema=public"
-      JWT_SECRET: "${JWT_SECRET}"
-      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET}"
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET is required}"
+      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}"
       DEFAULT_SEED_PASSWORD: "${DEFAULT_SEED_PASSWORD:-}"
       CORS_ORIGIN: "${CORS_ORIGIN:-http://localhost:3000}"
       PORT: 4000
