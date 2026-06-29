@@ -48,6 +48,8 @@ Verify and generate the Prisma Client:
 npm run generate -w packages/db
 ```
 
+For the complete DB runbook (daily dev flow, schema-change sequence, and production release sequence), see [packages/db/README.md](packages/db/README.md).
+
 Create a migration when the Prisma schema changes in development:
 ```bash
 npm run db:migrate:dev -w apps/api -- --name <migration_name>
