@@ -11,6 +11,7 @@
     "db:migrate:status": "npx prisma migrate status --schema=../../packages/db/prisma/schema.prisma",
     "build": "tsc",
     "start": "node dist/index.js",
+    "pretest": "cd ../.. && npm run build -w @zenshin/db",
     "test": "jest --runInBand --detectOpenHandles"
   },
   "dependencies": {

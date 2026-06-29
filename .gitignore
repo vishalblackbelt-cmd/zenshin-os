@@ -8,6 +8,8 @@ web_modules/
 # Build outputs
 dist/
 build/
+packages/db/src/*.js
+packages/db/src/*.d.ts
 .next/
 out/
 .docusaurus/
