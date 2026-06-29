@@ -26,7 +26,7 @@ npm install --legacy-peer-deps
 ```
 
 ### 3. Environment Configuration
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory (single source of truth for local development):
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/zenshin?schema=public"
 JWT_SECRET="your_jwt_secret"
@@ -35,12 +35,12 @@ PORT=4000
 NODE_ENV=development
 ```
 
+Do not create separate `.env` files in workspace folders. Keep all local runtime values in the root `.env`.
+
 ### 4. Database Setup & Seeding
 Verify and generate the Prisma Client:
 ```bash
-# Go to packages/db
-cd packages/db
-npx prisma generate
+npm run generate -w packages/db
 ```
 
 ### 5. Running the Application Locally
