@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "npx prisma db push --schema=../../packages/db/prisma/schema.prisma && tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "jest --runInBand --detectOpenHandles"

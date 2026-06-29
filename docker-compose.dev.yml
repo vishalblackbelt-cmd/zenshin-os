@@ -9,7 +9,7 @@ services:
       JWT_REFRESH_SECRET: "zenshin_refresh_secret_key_12345"
       PORT: 4000
       NODE_ENV: development
-    command: sh -c "npm run generate -w packages/db && npm run dev -w apps/api"
+    command: sh -c "npm run dev -w apps/api"
     volumes:
       - .:/app
       - zenshin_api_node_modules:/app/node_modules

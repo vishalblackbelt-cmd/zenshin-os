@@ -51,6 +51,8 @@ npm run dev
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:4000
 
+In development mode, the API startup automatically runs Prisma schema sync (`prisma db push`) before launching the server watcher, so first-time runs do not fail with missing table errors during seeding.
+
 ---
 
 ## Running with Docker Compose (Production-style)
@@ -79,6 +81,8 @@ The application will be accessible at:
 The `docker-compose.dev.yml` override is optional, but necessary if you want containerized development behavior (watch mode + HMR). If you do not need Docker for development, use `npm run dev` locally.
 
 The dev override uses dedicated development images for API and Web plus separate `node_modules` volumes per service to avoid dependency corruption/race conditions during startup.
+
+The API dev container also applies schema changes automatically before boot to prevent Prisma `P2021` table-not-found errors during seed initialization.
 
 If you previously built old images/volumes and still see Prisma/OpenSSL errors, reset and rebuild:
 ```bash
