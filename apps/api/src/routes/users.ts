@@ -101,6 +101,10 @@ router.get('/', requireRole(['OWNER', 'MANAGER']), async (req: AuthenticatedRequ
   try {
     const user = req.user!;
 
+    if (user.role === 'MANAGER' && !user.branchId) {
+      return res.status(403).json({ error: 'Forbidden: user has no assigned branch' });
+    }
+
     const users = await prisma.user.findMany({
       where:
         user.role === 'OWNER'
