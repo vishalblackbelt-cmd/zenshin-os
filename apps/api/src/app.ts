@@ -7,14 +7,30 @@ import attendanceRouter from './routes/attendance.js';
 import trialsRouter from './routes/trials.js';
 import billingRouter from './routes/billing.js';
 import auditRouter from './routes/audit.js';
+import { getCorsOrigins } from './config.js';
 import { runFinancialCron } from './services/cron.js';
 import { authenticateToken, requireRole } from './middleware/auth.js';
 
 const app = express();
+const corsOrigins = getCorsOrigins();
 
 // Configure Middleware
-app.use(cors());
-app.use(express.json());
+app.use(
+  cors(
+    corsOrigins
+      ? {
+          origin(origin, callback) {
+            if (!origin || corsOrigins.includes(origin)) {
+              return callback(null, true);
+            }
+
+            return callback(new Error('Origin not allowed by CORS'));
+          }
+        }
+      : undefined
+  )
+);
+app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 
 // Mount Routes
@@ -38,6 +54,10 @@ app.post('/api/cron/trigger', authenticateToken, requireRole(['OWNER', 'MANAGER'
 // Root check endpoint
 app.get('/', (req, res) => {
   res.json({ name: 'Zenshin OS API Service', version: '1.3.0-RC1', status: 'HEALTHY' });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
 });
 
 // Bootstrap database

@@ -31,6 +31,9 @@ Create a `.env` file in the root directory (single source of truth for local dev
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/zenshin?schema=public"
 JWT_SECRET="your_jwt_secret"
 JWT_REFRESH_SECRET="your_jwt_refresh_secret"
+DEFAULT_SEED_PASSWORD="set_a_dev_only_seed_password"
+CORS_ORIGIN="http://localhost:3000"
+VITE_API_BASE_URL="http://localhost:4000"
 PORT=4000
 NODE_ENV=development
 ```
@@ -52,6 +55,7 @@ npm run dev
 - **Backend API**: http://localhost:4000
 
 In development mode, the API startup automatically runs Prisma schema sync (`prisma db push`) before launching the server watcher, so first-time runs do not fail with missing table errors during seeding.
+If `DEFAULT_SEED_PASSWORD` is set, development seed accounts are created for `owner@zenshin.com` and `sirifort@zenshin.com` using that password.
 
 ---
 
@@ -65,6 +69,7 @@ The application will be accessible at:
 - **Backend API**: http://localhost:4000
 
 This mode is production-style: the web app is served by Nginx and the API runs compiled output. It does **not** provide frontend HMR or backend watch reload.
+The API waits for PostgreSQL readiness before booting and reads JWT/CORS/seed settings from the root `.env` file.
 
 ---
 

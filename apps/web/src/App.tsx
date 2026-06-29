@@ -37,9 +37,12 @@ export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE';
 
 export interface UserSession {
   id: string;
+  email: string;
   name: string;
   role: Role;
   branch: Branch | null; // null for global OWNER
+  accessToken: string;
+  refreshToken: string;
 }
 
 export interface Student {
@@ -121,6 +124,8 @@ const INITIAL_AUDIT: AuditLog[] = [];
 
 const INITIAL_TIMELINE: TimelineEvent[] = [];
 
+const API_BASE_URL = ((import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000').replace(/\/$/, '');
+
 // Clear old localStorage mock data if it hasn't been cleared yet for v1.3 release
 if (typeof window !== 'undefined' && !localStorage.getItem('zenshin-v1.3-initialized')) {
   localStorage.removeItem('zenshin-students');
@@ -131,14 +136,6 @@ if (typeof window !== 'undefined' && !localStorage.getItem('zenshin-v1.3-initial
   localStorage.removeItem('zenshin-session');
   localStorage.setItem('zenshin-v1.3-initialized', 'true');
 }
-
-const VALID_USERS = [
-  { email: 'owner@zenshin.com', password: 'password123', name: 'Shihan Vishal jaiswal', role: 'OWNER' as Role, branch: null },
-  { email: 'admin', password: 'password123', name: 'Shihan Vishal jaiswal', role: 'OWNER' as Role, branch: null },
-  { email: 'sirifort@zenshin.com', password: 'password123', name: 'Anjali Sen (Sirifort Manager)', role: 'MANAGER' as Role, branch: 'Sirifort' as Branch },
-  { email: 'asiad@zenshin.com', password: 'password123', name: 'Rohan Verma (Asiad Manager)', role: 'MANAGER' as Role, branch: 'Asiad' as Branch },
-  { email: 'instructor@zenshin.com', password: 'password123', name: 'Coach Karan Dev', role: 'INSTRUCTOR' as Role, branch: 'Sirifort' as Branch },
-];
 
 // Helper to seed localStorage
 function loadFromStorage<T>(key: string, initial: T): T {
@@ -169,6 +166,7 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [loginPending, setLoginPending] = useState(false);
 
   // DB States
   const [students, setStudents] = useState<Student[]>(() => loadFromStorage('zenshin-students', INITIAL_STUDENTS));
@@ -617,61 +615,61 @@ export default function App() {
     alert('System settings updated successfully!');
   };
 
-  // Quick switch mock profiles
-  const switchUserSession = (role: Role) => {
-    let name = 'Shihan Vishal jaiswal';
-    let branch: Branch | null = null;
-    if (role === 'MANAGER') {
-      name = 'Anjali Sen (Sirifort Manager)';
-      branch = 'Sirifort';
-    } else if (role === 'INSTRUCTOR') {
-      name = 'Coach Karan Dev';
-      branch = 'Sirifort';
-    } else if (role === 'PARENT') {
-      name = 'Ramesh Sharma (Aarav\'s Parent)';
-      branch = 'Sirifort';
-    } else if (role === 'STUDENT') {
-      name = 'Aarav Sharma (Student)';
-      branch = 'Sirifort';
-    }
-    const sessionData = { id: 'U' + Math.floor(Math.random() * 1000), name, role, branch };
-    setCurrentSession(sessionData);
-    saveToStorage('zenshin-session', sessionData);
-    logAudit('SESSION_SWITCH', `Switched active login role to ${role}`, branch || 'GLOBAL');
-  };
-
   // Login handler
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = VALID_USERS.find(
-      u => (u.email.toLowerCase() === loginEmail.toLowerCase()) && u.password === loginPassword
-    );
-    if (user) {
-      const sessionData = {
-        id: 'U' + Math.floor(Math.random() * 1000),
-        name: user.name,
-        role: user.role,
-        branch: user.branch
+    setLoginPending(true);
+    setLoginError('');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: loginEmail,
+          password: loginPassword
+        })
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setLoginError(payload.error || 'Login failed.');
+        return;
+      }
+
+      const sessionData: UserSession = {
+        id: payload.user.id,
+        email: payload.user.email,
+        name: payload.user.name,
+        role: payload.user.role,
+        branch: payload.user.branch,
+        accessToken: payload.accessToken,
+        refreshToken: payload.refreshToken
       };
+
       setCurrentSession(sessionData);
       saveToStorage('zenshin-session', sessionData);
       setLoginEmail('');
       setLoginPassword('');
       setLoginError('');
-      
-      // Seed an initial audit log entry for the login
+
       const newLog: AuditLog = {
         id: 'A' + Math.floor(Math.random() * 10000),
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        actor: user.name,
-        role: user.role,
+        actor: sessionData.name,
+        role: sessionData.role,
         action: 'LOGIN',
-        details: `${user.role} logged in successfully.`,
-        branch: user.branch || 'GLOBAL'
+        details: `${sessionData.role} logged in successfully.`,
+        branch: sessionData.branch || 'GLOBAL'
       };
       setAuditLogs(prev => [newLog, ...prev]);
-    } else {
-      setLoginError('Invalid User ID or Password.');
+    } catch {
+      setLoginError('Unable to reach the API. Confirm the backend is running and reachable.');
+    } finally {
+      setLoginPending(false);
     }
   };
 
@@ -827,15 +825,16 @@ export default function App() {
 
             <button
               type="submit"
+              disabled={loginPending}
               className="w-full py-3 bg-gradient-to-tr from-[var(--accent-primary)] to-[var(--accent-secondary)] hover:opacity-90 active:scale-[0.98] text-slate-950 font-black text-sm rounded-xl transition-all shadow-lg shadow-violet-500/20 glow-btn"
             >
-              Sign In to Portal
+              {loginPending ? 'Signing In...' : 'Sign In to Portal'}
             </button>
           </form>
 
           {/* Hint details */}
           <div className="border-t border-[var(--border-muted)] pt-4 text-center">
-            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-2">Predefined Portal Roles</span>
+            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-2">Default Seed Accounts</span>
             <div className="grid grid-cols-2 gap-2 text-[10px] text-[var(--text-muted)] font-semibold">
               <div className="bg-[var(--bg-secondary)] border border-[var(--border-muted)] p-2 rounded-lg">
                 <p className="text-[var(--text-primary)] font-bold">System Owner</p>
@@ -845,16 +844,8 @@ export default function App() {
                 <p className="text-[var(--text-primary)] font-bold">Sirifort Manager</p>
                 <code className="text-amber-400">sirifort@zenshin.com</code>
               </div>
-              <div className="bg-[var(--bg-secondary)] border border-[var(--border-muted)] p-2 rounded-lg">
-                <p className="text-[var(--text-primary)] font-bold">Asiad Manager</p>
-                <code className="text-amber-400">asiad@zenshin.com</code>
-              </div>
-              <div className="bg-[var(--bg-secondary)] border border-[var(--border-muted)] p-2 rounded-lg">
-                <p className="text-[var(--text-primary)] font-bold">Instructor</p>
-                <code className="text-amber-400">instructor@zenshin.com</code>
-              </div>
             </div>
-            <p className="text-[9px] text-[var(--text-muted)] mt-3">Default Password for all: <code className="text-amber-400 font-bold">password123</code></p>
+            <p className="text-[9px] text-[var(--text-muted)] mt-3">Credentials are created only when <code className="text-amber-400 font-bold">DEFAULT_SEED_PASSWORD</code> is configured.</p>
           </div>
 
         </div>
@@ -924,24 +915,6 @@ export default function App() {
                 <Settings className="w-4 h-4" />
               </button>
             )}
-
-            {/* Quick Role Switcher for Testing */}
-            <div className="flex items-center gap-1.5 border border-[var(--border-muted)] bg-[var(--bg-tertiary)] p-1 rounded-lg">
-              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] px-2 font-mono">RBAC Test:</span>
-              {(['OWNER', 'MANAGER', 'INSTRUCTOR', 'PARENT'] as Role[]).map(r => (
-                <button
-                  key={r}
-                  onClick={() => switchUserSession(r)}
-                  className={`px-2 py-1 rounded text-[10px] font-bold font-mono transition-all ${
-                    currentSession?.role === r 
-                      ? 'bg-[var(--accent-primary)] text-slate-950 shadow-md' 
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
 
             {/* Branch Switcher (Locked if Manager) */}
             <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] p-1 rounded-lg border border-[var(--border-muted)]">

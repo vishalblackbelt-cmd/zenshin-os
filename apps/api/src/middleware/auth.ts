@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { Role } from '@zenshin/db';
+import { getRequiredEnv } from '../config.js';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -19,7 +20,14 @@ export function authenticateToken(req: AuthenticatedRequest, res: Response, next
     return res.status(401).json({ error: 'Authentication token required' });
   }
 
-  const secret = process.env.JWT_SECRET || 'zenshin_secret_key_12345';
+  let secret: string;
+
+  try {
+    secret = getRequiredEnv('JWT_SECRET');
+  } catch {
+    return res.status(500).json({ error: 'Server authentication is not configured' });
+  }
+
   jwt.verify(token, secret, (err: any, user: any) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });

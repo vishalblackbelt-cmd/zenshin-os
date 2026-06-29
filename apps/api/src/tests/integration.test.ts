@@ -1,3 +1,6 @@
+// @ts-nocheck
+/// <reference types="jest" />
+
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../app.js';
@@ -15,7 +18,7 @@ jest.mock('../db.js', () => {
     },
     branch: {
       findUnique: jest.fn(),
-      upsert: jest.fn().mockImplementation((args) => {
+      upsert: jest.fn().mockImplementation((args: any) => {
         return Promise.resolve({
           id: args?.create?.name === 'Asiad' ? 'asiad-id' : 'sirifort-id',
           name: args?.create?.name || 'Sirifort'
@@ -63,7 +66,7 @@ jest.mock('../services/whatsapp.js', () => ({
   sendWhatsAppMessage: jest.fn().mockResolvedValue(true),
 }));
 
-const JWT_SECRET = process.env.JWT_SECRET || 'zenshin_secret_key_12345';
+const JWT_SECRET = 'test-jwt-secret';
 
 describe('ZENSHIN OS Integration Test Suite', () => {
   let ownerToken: string;
@@ -71,6 +74,9 @@ describe('ZENSHIN OS Integration Test Suite', () => {
   let studentToken: string;
 
   beforeAll(() => {
+    process.env.JWT_SECRET = JWT_SECRET;
+    process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret';
+
     // Generate mock tokens
     ownerToken = jwt.sign({ id: 'owner-id', email: 'owner@zenshin.com', role: 'OWNER', branchId: null }, JWT_SECRET);
     managerToken = jwt.sign({ id: 'manager-id', email: 'manager@zenshin.com', role: 'MANAGER', branchId: 'sirifort-id' }, JWT_SECRET);
