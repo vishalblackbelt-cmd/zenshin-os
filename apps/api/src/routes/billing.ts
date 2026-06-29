@@ -3,6 +3,7 @@ import { prisma } from '../db.js';
 import { AuthenticatedRequest, requireRole, requireBranchAccess } from '../middleware/auth.js';
 import { LedgerEntryType, StudentStatus } from '@zenshin/db';
 import { sendWhatsAppMessage } from '../services/whatsapp.js';
+import { Prisma } from '@zenshin/db';
 
 const router = Router();
 
@@ -49,7 +50,7 @@ router.post('/ledger', requireRole(['OWNER', 'MANAGER']), requireBranchAccess, a
     const ledgerVal = type === 'CHARGE' ? LedgerEntryType.CHARGE : LedgerEntryType.PAYMENT;
     const ledgerAmount = parseInt(amount);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Create ledger entry
       const entry = await tx.ledgerEntry.create({
         data: {

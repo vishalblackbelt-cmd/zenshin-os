@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.prisma = void 0;
-const client_1 = require("@prisma/client");
-exports.prisma = new client_1.PrismaClient();
-__exportStar(require("@prisma/client"), exports);
+var client_1 = require("@prisma/client");
+__exportStar(require("@prisma/client"), exports); // This exports Role, AttendanceStatus, etc.
+var prisma = new client_1.PrismaClient();
+exports.default = prisma;

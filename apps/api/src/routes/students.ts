@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../db.js';
 import { AuthenticatedRequest, requireRole, requireBranchAccess } from '../middleware/auth.js';
 import { StudentStatus, LedgerEntryType } from '@zenshin/db';
+import { Prisma } from '@zenshin/db';
 
 const router = Router();
 
@@ -79,7 +80,7 @@ router.post('/', requireRole(['OWNER', 'MANAGER']), requireBranchAccess, async (
     const studentId = `${prefix}${String(count + 1).padStart(4, '0')}`;
 
     // Create student and record initial charge (tuition fee of ₹3600)
-    const newStudent = await prisma.$transaction(async (tx) => {
+    const newStudent = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const student = await tx.student.create({
         data: {
           id: studentId,
@@ -148,7 +149,7 @@ router.put('/:id', requireRole(['OWNER', 'MANAGER']), async (req: AuthenticatedR
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const studentUpdated = await tx.student.update({
         where: { id },
         data: {
@@ -192,7 +193,7 @@ router.delete('/:id', requireRole(['OWNER', 'MANAGER']), async (req: Authenticat
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.student.delete({ where: { id } });
       await tx.auditLog.create({
         data: {
@@ -228,7 +229,7 @@ router.post('/:id/suspend', requireRole(['OWNER', 'MANAGER']), async (req: Authe
     const settings = await prisma.settings.findUnique({ where: { id: 'global' } });
     const chargeAmount = settings ? settings.reactivationCharge : 1000;
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Mark status as INACTIVE
       const studentUpdated = await tx.student.update({
         where: { id },
