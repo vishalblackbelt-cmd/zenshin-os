@@ -26,42 +26,57 @@ export async function seedInitialDatabase() {
     const seedPassword = getOptionalEnv('DEFAULT_SEED_PASSWORD');
 
     if (seedPassword) {
-      // 2. Seed owner
-      const existingOwner = await prisma.user.findFirst({
-        where: { role: 'OWNER' }
-      });
+      const hashedPassword = await bcrypt.hash(seedPassword, 10);
+      const defaultUsers = [
+        {
+          email: 'owner@zenshin.com',
+          name: 'Shihan Vishal Jaiswal',
+          role: 'OWNER' as const,
+          branchId: null,
+          label: 'default owner'
+        },
+        {
+          email: 'sirifort@zenshin.com',
+          name: 'Anjali Sen',
+          role: 'MANAGER' as const,
+          branchId: sirifort.id,
+          label: 'default Sirifort manager'
+        },
+        {
+          email: 'asiad@zenshin.com',
+          name: 'Rahul Kapoor',
+          role: 'MANAGER' as const,
+          branchId: asiad.id,
+          label: 'default Asiad manager'
+        },
+        {
+          email: 'instructor@zenshin.com',
+          name: 'Meera Bhatia',
+          role: 'INSTRUCTOR' as const,
+          branchId: sirifort.id,
+          label: 'default instructor'
+        }
+      ];
 
-      if (!existingOwner) {
-        const hashedPassword = await bcrypt.hash(seedPassword, 10);
+      for (const defaultUser of defaultUsers) {
+        const existingUser = await prisma.user.findUnique({
+          where: { email: defaultUser.email }
+        });
+
+        if (existingUser) {
+          continue;
+        }
+
         await prisma.user.create({
           data: {
-            email: 'owner@zenshin.com',
-            name: 'Shihan Vishal Jaiswal',
+            email: defaultUser.email,
+            name: defaultUser.name,
             password: hashedPassword,
-            role: 'OWNER',
-            branchId: null
+            role: defaultUser.role,
+            branchId: defaultUser.branchId
           }
         });
-        console.log('[Seeding] Created default owner account.');
-      }
-
-      // 3. Seed manager for Sirifort
-      const existingManager = await prisma.user.findFirst({
-        where: { role: 'MANAGER', branchId: sirifort.id }
-      });
-
-      if (!existingManager) {
-        const hashedPassword = await bcrypt.hash(seedPassword, 10);
-        await prisma.user.create({
-          data: {
-            email: 'sirifort@zenshin.com',
-            name: 'Anjali Sen',
-            password: hashedPassword,
-            role: 'MANAGER',
-            branchId: sirifort.id
-          }
-        });
-        console.log('[Seeding] Created default Sirifort manager account.');
+        console.log(`[Seeding] Created ${defaultUser.label} account.`);
       }
     } else {
       console.warn('[Seeding] DEFAULT_SEED_PASSWORD is not configured. Skipping default user creation.');

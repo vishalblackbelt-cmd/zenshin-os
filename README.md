@@ -4,6 +4,8 @@ ZENSHIN OS is a multi-tenant Enterprise Resource Planning (ERP) platform designe
 
 It implements a unified membership directory, class attendance registers, a trial lead conversion funnel, accounting ledgers, and an automated Financial Discipline Engine.
 
+Operationally, the platform now uses the backend as the source of truth for core workflows: authentication, student enrollment, trials, attendance, billing, audit history, and privileged user administration.
+
 ## Tech Stack
 - **Frontend**: React 19, Vite, Tailwind CSS, Lucide Icons
 - **Backend**: Node.js 22, Express, TypeScript, Prisma ORM, node-cron
@@ -55,7 +57,12 @@ npm run dev
 - **Backend API**: http://localhost:4000
 
 In development mode, the API startup automatically runs Prisma schema sync (`prisma db push`) before launching the server watcher, so first-time runs do not fail with missing table errors during seeding.
-If `DEFAULT_SEED_PASSWORD` is set, development seed accounts are created for `owner@zenshin.com` and `sirifort@zenshin.com` using that password.
+If `DEFAULT_SEED_PASSWORD` is set, development seed accounts are created for `owner@zenshin.com`, `sirifort@zenshin.com`, `asiad@zenshin.com`, and `instructor@zenshin.com` using that password.
+
+### 6. User Administration
+- `OWNER` accounts can create and manage owner, manager, instructor, parent, and student login accounts across branches.
+- `MANAGER` accounts can manage instructor, parent, and student login accounts within their own branch.
+- Password resets and account deletion are available from the frontend `User Admin` tab and enforced again by backend RBAC.
 
 ---
 
@@ -102,6 +109,12 @@ The integration test suite tests authentication, RBAC access controls, billing l
 ```bash
 # Run tests inside the api workspace
 npm run test -w apps/api
+```
+
+For a production-style verification pass, run the same checks used in CI:
+```bash
+npm run build --workspaces --if-present
+npm audit --workspaces --omit=dev
 ```
 
 ---

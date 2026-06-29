@@ -7,6 +7,7 @@ import attendanceRouter from './routes/attendance.js';
 import trialsRouter from './routes/trials.js';
 import billingRouter from './routes/billing.js';
 import auditRouter from './routes/audit.js';
+import usersRouter from './routes/users.js';
 import { getCorsOrigins } from './config.js';
 import { runFinancialCron } from './services/cron.js';
 import { authenticateToken, requireRole } from './middleware/auth.js';
@@ -40,6 +41,7 @@ app.use('/api/attendance', authenticateToken, attendanceRouter);
 app.use('/api/trials', authenticateToken, trialsRouter);
 app.use('/api/billing', authenticateToken, billingRouter);
 app.use('/api/audit', authenticateToken, auditRouter);
+app.use('/api/users', authenticateToken, usersRouter);
 
 // POST /api/cron/trigger
 app.post('/api/cron/trigger', authenticateToken, requireRole(['OWNER', 'MANAGER']), async (req, res) => {

@@ -9,149 +9,58 @@ import {
   Search, 
   Filter, 
   Check, 
-  X, 
-  Trash2, 
   Settings, 
   RefreshCw, 
   MessageSquare, 
   UserPlus, 
   Clock, 
   AlertTriangle, 
-  Sun, 
-  Moon,
   Info,
-  Lock,
-  LogOut
 } from 'lucide-react';
+import {
+  API_BASE_URL,
+  DEFAULT_BRANCHES,
+  INITIAL_AUDIT,
+  INITIAL_LEDGER,
+  INITIAL_SETTINGS,
+  INITIAL_STUDENTS,
+  INITIAL_TIMELINE,
+  INITIAL_TRIALS,
+} from './constants';
+import { initializeClientStorage, loadFromStorage, saveToStorage } from './storage';
+import { LoginScreen } from './components/LoginScreen';
+import { NavigationTabs } from './components/NavigationTabs';
+import { Modals } from './components/Modals';
+import { ShellHeader } from './components/ShellHeader';
+import type {
+  AppTab,
+  AttendanceStatus,
+  AuditLog,
+  Branch,
+  LedgerEntry,
+  ManagedUser,
+  Role,
+  Student,
+  SystemSettings,
+  TimelineEvent,
+  TrialLead,
+  TrialStatus,
+  UserFormState,
+  UserSession,
+} from './types';
 
 
-// ==========================================
-// TYPES & INTERFACES
-// ==========================================
-
-export type Role = 'OWNER' | 'MANAGER' | 'INSTRUCTOR' | 'PARENT' | 'STUDENT';
-export type Branch = 'Sirifort' | 'Asiad';
-export type TrialStatus = 'NEW' | 'PAID' | 'TRIAL_COMPLETED' | 'JOINED' | 'LOST';
-export type StudentStatus = 'ACTIVE' | 'INACTIVE';
-export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE';
-
-export interface UserSession {
-  id: string;
-  email: string;
-  name: string;
-  role: Role;
-  branch: Branch | null; // null for global OWNER
-  accessToken: string;
-  refreshToken: string;
-}
-
-export interface Student {
-  id: string; // ZD0001, AD0001, etc.
-  name: string;
-  age: number;
-  category: string; // Kids, Teens, Adults
-  parentName: string;
-  mobile: string;
-  branch: Branch;
-  joiningDate: string;
-  currentBelt: string;
-  status: StudentStatus;
-  feeDueDate: string;
-  examEligible: boolean;
-  outstandingBalance: number;
-  attendanceRate: number; // e.g. 85 for 85%
-}
-
-export interface TrialLead {
-  id: string;
-  name: string;
-  mobile: string;
-  branch: Branch;
-  status: TrialStatus;
-  paidAmount: number; // Must track ₹500
-  createdAt: string;
-}
-
-export interface LedgerEntry {
-  id: string;
-  studentId: string;
-  studentName: string;
-  type: 'CHARGE' | 'PAYMENT';
-  amount: number;
-  description: string;
-  createdAt: string;
-}
-
-export interface AuditLog {
-  id: string;
-  timestamp: string;
-  actor: string;
-  role: Role;
-  action: string;
-  details: string;
-  branch: Branch | 'GLOBAL';
-}
-
-export interface TimelineEvent {
-  id: string;
-  studentId: string;
-  date: string;
-  type: string;
-  description: string;
-}
-
-export interface SystemSettings {
-  maxGracePeriod: number; // default 10 days
-  reactivationCharge: number; // default ₹1000
-}
-
-// ==========================================
-// MOCK INITIAL DATA & PERSISTENCE LAYER
-// ==========================================
-
-const INITIAL_SETTINGS: SystemSettings = {
-  maxGracePeriod: 10,
-  reactivationCharge: 1000
-};
-
-const INITIAL_STUDENTS: Student[] = [];
-
-const INITIAL_TRIALS: TrialLead[] = [];
-
-const INITIAL_LEDGER: LedgerEntry[] = [];
-
-const INITIAL_AUDIT: AuditLog[] = [];
-
-const INITIAL_TIMELINE: TimelineEvent[] = [];
-
-const API_BASE_URL = ((import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000').replace(/\/$/, '');
-
-// Clear old localStorage mock data if it hasn't been cleared yet for v1.3 release
-if (typeof window !== 'undefined' && !localStorage.getItem('zenshin-v1.3-initialized')) {
-  localStorage.removeItem('zenshin-students');
-  localStorage.removeItem('zenshin-trials');
-  localStorage.removeItem('zenshin-ledger');
-  localStorage.removeItem('zenshin-audit');
-  localStorage.removeItem('zenshin-timeline');
-  localStorage.removeItem('zenshin-session');
-  localStorage.setItem('zenshin-v1.3-initialized', 'true');
-}
-
-// Helper to seed localStorage
-function loadFromStorage<T>(key: string, initial: T): T {
-  const data = localStorage.getItem(key);
-  if (!data) {
-    localStorage.setItem(key, JSON.stringify(initial));
-    return initial;
-  }
-  return JSON.parse(data);
-}
-
-function saveToStorage<T>(key: string, data: T): void {
-  localStorage.setItem(key, JSON.stringify(data));
-}
+initializeClientStorage();
 
 export default function App() {
+  const createInitialUserForm = (session: UserSession | null): UserFormState => ({
+    name: '',
+    email: '',
+    password: '',
+    role: session?.role === 'MANAGER' ? 'INSTRUCTOR' : 'MANAGER',
+    branch: session?.branch ?? DEFAULT_BRANCHES[0]
+  });
+
   // Theme state
   const [theme, setTheme] = useState<'dark' | 'red'>(() => {
     return (localStorage.getItem('zenshin-theme') as 'dark' | 'red') || 'dark';
@@ -175,9 +84,15 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT);
   const [timeline, setTimeline] = useState<TimelineEvent[]>(INITIAL_TIMELINE);
   const [settings, setSettings] = useState<SystemSettings>(INITIAL_SETTINGS);
+  const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
+  const [availableBranches, setAvailableBranches] = useState<Branch[]>(DEFAULT_BRANCHES);
+  const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
+  const [userFormMode, setUserFormMode] = useState<'create' | 'edit'>('create');
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [userForm, setUserForm] = useState<UserFormState>(() => createInitialUserForm(currentSession));
 
   // Router simulation
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'students' | 'attendance' | 'trials' | 'billing' | 'audit'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<AppTab>('dashboard');
 
   // Filter and UI States
   const [activeBranch, setActiveBranch] = useState<Branch>('Sirifort');
@@ -233,6 +148,9 @@ export default function App() {
     setAuditLogs(INITIAL_AUDIT);
     setTimeline(INITIAL_TIMELINE);
     setSettings(INITIAL_SETTINGS);
+    setManagedUsers([]);
+    setAvailableRoles([]);
+    setAvailableBranches(DEFAULT_BRANCHES);
     setSelectedStudent(null);
     setShowReceipt(null);
   };
@@ -303,6 +221,17 @@ export default function App() {
     amount: receipt.amount,
     description: receipt.description,
     createdAt: formatTimestamp(receipt.transactionDate)
+  });
+
+  const mapManagedUser = (user: any): ManagedUser => ({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    branch: user.branch,
+    branchId: user.branchId,
+    createdAt: formatTimestamp(user.createdAt),
+    updatedAt: formatTimestamp(user.updatedAt)
   });
 
   const refreshAccessToken = async () => {
@@ -397,16 +326,24 @@ export default function App() {
       setSettings(settingsPayload);
 
       if (currentSession.role === 'OWNER' || currentSession.role === 'MANAGER') {
-        const [trialsPayload, auditPayload] = await Promise.all([
+        const [trialsPayload, auditPayload, usersPayload, rolesPayload, branchesPayload] = await Promise.all([
           apiRequest<any[]>('/api/trials'),
-          apiRequest<any[]>('/api/audit')
+          apiRequest<any[]>('/api/audit'),
+          apiRequest<any[]>('/api/users'),
+          apiRequest<Role[]>('/api/users/meta/roles'),
+          apiRequest<Branch[]>('/api/users/meta/branches')
         ]);
 
         setTrials(trialsPayload.map(mapTrial));
         setAuditLogs(auditPayload.map(mapAuditLog));
+        setManagedUsers(usersPayload.map(mapManagedUser));
+        setAvailableRoles(rolesPayload);
+        setAvailableBranches(branchesPayload.length > 0 ? branchesPayload : DEFAULT_BRANCHES);
       } else {
         setTrials(INITIAL_TRIALS);
         setAuditLogs(INITIAL_AUDIT);
+        setManagedUsers([]);
+        setAvailableRoles([]);
       }
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to load application data.');
@@ -469,13 +406,42 @@ export default function App() {
     setTimeline(INITIAL_TIMELINE);
   };
 
+  const resetUserAdminForm = () => {
+    setEditingUserId(null);
+    setUserFormMode('create');
+    setUserForm(createInitialUserForm(currentSession));
+  };
+
+  const startEditUser = (user: ManagedUser) => {
+    setEditingUserId(user.id);
+    setUserFormMode('edit');
+    setUserForm({
+      name: user.name,
+      email: user.email,
+      password: '',
+      role: user.role,
+      branch: user.branch ?? currentSession?.branch ?? 'Sirifort'
+    });
+    setCurrentTab('users');
+  };
+
   useEffect(() => {
     if (currentSession?.branch) {
       setActiveBranch(currentSession.branch);
     }
 
+    setUserForm(createInitialUserForm(currentSession));
+    setEditingUserId(null);
+    setUserFormMode('create');
+
     void loadAppData();
   }, [currentSession?.id]);
+
+  useEffect(() => {
+    if ((currentTab === 'trials' || currentTab === 'audit' || currentTab === 'users') && !(currentSession?.role === 'OWNER' || currentSession?.role === 'MANAGER')) {
+      setCurrentTab('dashboard');
+    }
+  }, [currentSession?.role, currentTab]);
 
   // Check RBAC Permissions
   const canPerform = (requiredRoles: Role[]) => {
@@ -692,6 +658,79 @@ export default function App() {
     }
   };
 
+  const handleUserSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    try {
+      const payload = {
+        name: userForm.name,
+        email: userForm.email,
+        role: userForm.role,
+        branchName: userForm.role === 'OWNER' ? null : userForm.branch,
+        ...(userFormMode === 'create' ? { password: userForm.password } : {})
+      };
+
+      const user = await apiRequest<ManagedUser>(
+        userFormMode === 'create' ? '/api/users' : `/api/users/${editingUserId}`,
+        {
+          method: userFormMode === 'create' ? 'POST' : 'PUT',
+          body: JSON.stringify(payload)
+        }
+      );
+
+      if (currentSession && user.id === currentSession.id) {
+        setCurrentSession({
+          ...currentSession,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          branch: user.branch
+        });
+      }
+
+      await loadAppData();
+      resetUserAdminForm();
+      alert(userFormMode === 'create' ? 'User account created successfully.' : 'User account updated successfully.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to save user account.');
+    }
+  };
+
+  const deleteManagedUser = async (user: ManagedUser) => {
+    try {
+      await apiRequest(`/api/users/${user.id}`, {
+        method: 'DELETE'
+      });
+
+      if (editingUserId === user.id) {
+        resetUserAdminForm();
+      }
+
+      await loadAppData();
+      alert('User account deleted successfully.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to delete user account.');
+    }
+  };
+
+  const resetManagedUserPassword = async (user: ManagedUser) => {
+    const nextPassword = window.prompt(`Enter a new password for ${user.email}. Minimum 8 characters.`);
+
+    if (!nextPassword) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/api/users/${user.id}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ password: nextPassword })
+      });
+      alert('Password reset successfully.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to reset password.');
+    }
+  };
+
   // Login handler
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -755,6 +794,7 @@ export default function App() {
     localStorage.removeItem('zenshin-session');
     setCurrentSession(null);
     resetAppData();
+    resetUserAdminForm();
   };
 
   // ==========================================
@@ -820,102 +860,29 @@ export default function App() {
   };
 
   const stats = getStats();
+  const navigationTabs = [
+    { id: 'dashboard' as const, label: 'Analytics Dashboard', icon: Activity },
+    { id: 'students' as const, label: 'Student Directory', icon: Users },
+    { id: 'attendance' as const, label: 'Kiosk Attendance', icon: Calendar },
+    { id: 'trials' as const, label: 'Trial Leads Funnel', icon: UserPlus, privileged: true },
+    { id: 'billing' as const, label: 'Accounting Ledger', icon: DollarSign },
+    { id: 'users' as const, label: 'User Admin', icon: Settings, privileged: true },
+    { id: 'audit' as const, label: 'System Audit Logs', icon: Shield, privileged: true }
+  ].filter((tab) => !tab.privileged || canPerform(['OWNER', 'MANAGER']));
 
   if (!currentSession) {
     return (
-      <div className="min-h-screen text-slate-100 flex flex-col items-center justify-center p-6 antialiased bg-[var(--bg-primary)] animate-fadeIn">
-        {/* Elegant top right floating theme toggle */}
-        <div className="absolute top-6 right-6">
-          <button
-            onClick={() => setTheme(prev => prev === 'dark' ? 'red' : 'dark')}
-            className="p-2.5 rounded-lg border border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] transition-all hover:text-[var(--text-primary)]"
-          >
-            {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4 text-orange-400" />}
-          </button>
-        </div>
-
-        <div className="w-full max-w-md glass-card rounded-2xl p-8 border border-[var(--border-glow)] flex flex-col gap-6 shadow-2xl relative overflow-hidden transition-all duration-300">
-          
-          {/* Subtle colored glow blur in background */}
-          <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full bg-[var(--accent-primary)] opacity-10 blur-3xl pointer-events-none"></div>
-          <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full bg-[var(--accent-secondary)] opacity-10 blur-3xl pointer-events-none"></div>
-
-          {/* Logo / Title */}
-          <div className="flex flex-col items-center text-center gap-2">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[var(--accent-primary)] to-[var(--accent-secondary)] flex items-center justify-center shadow-lg shadow-violet-500/20 mb-2 animate-bounce">
-              <span className="font-extrabold text-2xl text-slate-900 font-mono tracking-tighter">禅</span>
-            </div>
-            <div>
-              <div className="flex items-center justify-center gap-2">
-                <h1 className="text-2xl font-black tracking-wider text-[var(--text-primary)]">ZENSHIN OS</h1>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/20">
-                  v1.3 RC-1
-                </span>
-              </div>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Shotokan Karate Academy ERP Portal</p>
-            </div>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            {loginError && (
-              <div className="p-3 rounded-lg border border-red-500/20 bg-red-950/20 text-red-400 text-xs font-semibold flex items-center gap-2 animate-pulse">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{loginError}</span>
-              </div>
-            )}
-
-            <div>
-              <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1.5">User ID / Email</label>
-              <input
-                type="text"
-                required
-                placeholder="owner@zenshin.com"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] placeholder:text-slate-600 focus:outline-none focus:border-[var(--accent-primary)] transition-all font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1.5">Password</label>
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] placeholder:text-slate-600 focus:outline-none focus:border-[var(--accent-primary)] transition-all font-mono"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loginPending}
-              className="w-full py-3 bg-gradient-to-tr from-[var(--accent-primary)] to-[var(--accent-secondary)] hover:opacity-90 active:scale-[0.98] text-slate-950 font-black text-sm rounded-xl transition-all shadow-lg shadow-violet-500/20 glow-btn"
-            >
-              {loginPending ? 'Signing In...' : 'Sign In to Portal'}
-            </button>
-          </form>
-
-          {/* Hint details */}
-          <div className="border-t border-[var(--border-muted)] pt-4 text-center">
-            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-2">Default Seed Accounts</span>
-            <div className="grid grid-cols-2 gap-2 text-[10px] text-[var(--text-muted)] font-semibold">
-              <div className="bg-[var(--bg-secondary)] border border-[var(--border-muted)] p-2 rounded-lg">
-                <p className="text-[var(--text-primary)] font-bold">System Owner</p>
-                <code className="text-amber-400">owner@zenshin.com</code>
-              </div>
-              <div className="bg-[var(--bg-secondary)] border border-[var(--border-muted)] p-2 rounded-lg">
-                <p className="text-[var(--text-primary)] font-bold">Sirifort Manager</p>
-                <code className="text-amber-400">sirifort@zenshin.com</code>
-              </div>
-            </div>
-            <p className="text-[9px] text-[var(--text-muted)] mt-3">Credentials are created only when <code className="text-amber-400 font-bold">DEFAULT_SEED_PASSWORD</code> is configured.</p>
-          </div>
-
-        </div>
-      </div>
+      <LoginScreen
+        theme={theme}
+        onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'red' : 'dark'))}
+        loginEmail={loginEmail}
+        loginPassword={loginPassword}
+        loginError={loginError}
+        loginPending={loginPending}
+        onEmailChange={setLoginEmail}
+        onPasswordChange={setLoginPassword}
+        onSubmit={handleLoginSubmit}
+      />
     );
   }
 
@@ -947,127 +914,25 @@ export default function App() {
       {/* ==========================================
           HEADER SECTION (NAVBAR & BRANCH SWITCHER)
          ========================================== */}
-      <header className="border-b border-[var(--border-muted)] bg-[var(--bg-secondary)] py-4 px-6 sticky top-0 z-40 transition-all duration-300">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-          
-          {/* Logo Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[var(--accent-primary)] to-[var(--accent-secondary)] flex items-center justify-center shadow-lg shadow-violet-500/10">
-              <span className="font-extrabold text-lg text-slate-900 font-mono tracking-tighter">禅</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-[var(--text-primary)]">ZENSHIN OS</h1>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/20">
-                  v1.3 RC-1
-                </span>
-              </div>
-              <p className="text-xs text-[var(--text-muted)]">Shotokan Karate Academy ERP Portal</p>
-            </div>
-          </div>
-
-          {/* Interactive controls */}
-          <div className="flex flex-wrap items-center gap-3">
-            
-            {/* Global Settings Trigger - OWNER Only */}
-            {currentSession?.role === 'OWNER' && (
-              <button 
-                onClick={() => {
-                  alert(`Settings Configs:\nGrace Period: ${settings.maxGracePeriod} days\nReactivation Fee: ₹${settings.reactivationCharge}\nConfigure directly under the Accounting Ledger tab.`);
-                }}
-                className="p-2.5 rounded-lg border border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] transition-all hover:text-[var(--text-primary)]"
-                title="System settings"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            )}
-
-            {/* Branch Switcher (Locked if Manager) */}
-            <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] p-1 rounded-lg border border-[var(--border-muted)]">
-              {(['Sirifort', 'Asiad'] as Branch[]).map(b => {
-                const isLocked = currentSession?.role === 'MANAGER' && currentSession?.branch !== b;
-                return (
-                  <button
-                    key={b}
-                    disabled={isLocked}
-                    onClick={() => setActiveBranch(b)}
-                    className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                      activeBranch === b 
-                        ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] border border-[var(--border-muted)]' 
-                        : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                    } ${isLocked ? 'opacity-30 cursor-not-allowed' : ''}`}
-                  >
-                    <span>{b} Dojo</span>
-                    {isLocked && <Lock className="w-3 h-3 text-red-500" />}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Theme Toggle */}
-            <button
-              onClick={() => setTheme(prev => prev === 'dark' ? 'red' : 'dark')}
-              className="p-2.5 rounded-lg border border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] transition-all hover:text-[var(--text-primary)]"
-            >
-              {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4 text-orange-400" />}
-            </button>
-
-            {/* Logged in indicator */}
-            <div className="flex items-center gap-2 pl-2 border-l border-[var(--border-muted)]">
-              <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-              <div className="text-right">
-                <p className="text-xs font-semibold text-[var(--text-primary)]">{currentSession?.name}</p>
-                <p className="text-[10px] text-[var(--text-muted)] font-mono">{currentSession?.role} Mode</p>
-              </div>
-            </div>
-
-            {/* Log Out button */}
-            <button
-              onClick={handleLogout}
-              className="p-2.5 rounded-lg border border-[var(--border-muted)] hover:bg-red-500/10 hover:text-red-400 text-[var(--text-muted)] transition-all flex items-center justify-center gap-1.5"
-              title="Log Out"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline text-xs font-bold">Logout</span>
-            </button>
-
-          </div>
-
-        </div>
-      </header>
+      <ShellHeader
+        currentSession={currentSession}
+        activeBranch={activeBranch}
+        theme={theme}
+        settings={settings}
+        onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'red' : 'dark'))}
+        onLogout={handleLogout}
+        onBranchChange={setActiveBranch}
+      />
 
       {/* ==========================================
           NAVIGATION TABS
          ========================================== */}
-      <nav className="bg-[var(--bg-tertiary)] border-b border-[var(--border-muted)] px-6">
-        <div className="max-w-7xl mx-auto flex overflow-x-auto scrollbar-none gap-6">
-          {[
-            { id: 'dashboard', label: 'Analytics Dashboard', icon: Activity },
-            { id: 'students', label: 'Student Directory', icon: Users },
-            { id: 'attendance', label: 'Kiosk Attendance', icon: Calendar },
-            { id: 'trials', label: 'Trial Leads Funnel', icon: UserPlus },
-            { id: 'billing', label: 'Accounting Ledger', icon: DollarSign },
-            { id: 'audit', label: 'System Audit Logs', icon: Shield },
-          ].map(tab => {
-            const Icon = tab.icon;
-            const isActive = currentTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setCurrentTab(tab.id as any)}
-                className={`py-4 px-1 flex items-center gap-2 border-b-2 font-semibold text-sm whitespace-nowrap transition-all duration-300 ${
-                  isActive 
-                    ? 'border-[var(--accent-primary)] text-[var(--text-primary)] font-bold' 
-                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[var(--accent-primary)]' : ''}`} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+      <NavigationTabs
+        tabs={navigationTabs}
+        currentTab={currentTab}
+        canAccessPrivileged={canPerform(['OWNER', 'MANAGER'])}
+        onTabChange={setCurrentTab}
+      />
 
       {/* ==========================================
           MAIN CONTENT WORKSPACE
@@ -1872,6 +1737,189 @@ export default function App() {
           </div>
         )}
 
+        {currentTab === 'users' && canPerform(['OWNER', 'MANAGER']) && (
+          <div className="grid grid-cols-1 xl:grid-cols-[380px_minmax(0,1fr)] gap-6 animate-fadeIn">
+            <div className="glass-card p-6 rounded-2xl">
+              <div className="flex items-start justify-between gap-3 border-b border-[var(--border-muted)] pb-4 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-[var(--text-primary)]">System User Administration</h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
+                    {currentSession.role === 'OWNER'
+                      ? 'Manage owners, managers, and dojo-facing accounts across all branches.'
+                      : 'Manage accounts assigned to your branch only.'}
+                  </p>
+                </div>
+                {userFormMode === 'edit' && (
+                  <button
+                    onClick={resetUserAdminForm}
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border-muted)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs font-bold"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
+
+              <form onSubmit={handleUserSubmit} className="space-y-4 text-xs">
+                <div>
+                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={userForm.name}
+                    onChange={(e) => setUserForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={userForm.email}
+                    onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))}
+                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                  />
+                </div>
+
+                {userFormMode === 'create' && (
+                  <div>
+                    <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Initial Password</label>
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      value={userForm.password}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, password: e.target.value }))}
+                      className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                    />
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1">Use a temporary password and rotate it after first login.</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Role</label>
+                    <select
+                      value={userForm.role}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, role: e.target.value as Role }))}
+                      className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                    >
+                      {availableRoles.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Assigned Branch</label>
+                    <select
+                      value={userForm.role === 'OWNER' ? '' : userForm.branch}
+                      disabled={userForm.role === 'OWNER' || currentSession.role === 'MANAGER'}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, branch: e.target.value as Branch }))}
+                      className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] disabled:opacity-60"
+                    >
+                      {userForm.role === 'OWNER' ? (
+                        <option value="">Global owner access</option>
+                      ) : (
+                        availableBranches.map((branch) => (
+                          <option key={branch} value={branch}>{branch}</option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-slate-950 font-bold text-xs rounded-lg hover:scale-[1.02] transition-all shadow-lg"
+                >
+                  {userFormMode === 'create' ? 'Create User Account' : 'Save Account Changes'}
+                </button>
+              </form>
+            </div>
+
+            <div className="glass-card rounded-2xl overflow-hidden border border-[var(--border-glow)]">
+              <div className="px-6 py-4 border-b border-[var(--border-muted)] flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-[var(--text-primary)]">Active User Accounts</h3>
+                  <p className="text-xs text-[var(--text-muted)]">{managedUsers.length} managed identities currently available in your scope.</p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[var(--bg-tertiary)] border border-[var(--border-muted)] text-[var(--text-muted)]">
+                  Branch scope: {currentSession.branch ?? 'GLOBAL'}
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[var(--bg-tertiary)] border-b border-[var(--border-muted)] text-[var(--text-muted)] text-xs font-bold">
+                      <th className="py-4 px-5">Identity</th>
+                      <th className="py-4 px-5">Role</th>
+                      <th className="py-4 px-5">Branch</th>
+                      <th className="py-4 px-5">Last Updated</th>
+                      <th className="py-4 px-5 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border-muted)] text-xs font-semibold">
+                    {managedUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-[var(--bg-secondary)]/50 transition-all">
+                        <td className="py-3.5 px-5">
+                          <div>
+                            <p className="text-sm font-bold text-[var(--text-primary)]">{user.name}</p>
+                            <p className="text-[10px] text-[var(--text-muted)] font-mono">{user.email}</p>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-5">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-[var(--bg-tertiary)] border border-[var(--border-muted)] text-[var(--text-primary)]">
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-5 text-[var(--text-muted)]">{user.branch ?? 'GLOBAL'}</td>
+                        <td className="py-3.5 px-5 font-mono text-[10px] text-[var(--text-muted)]">{user.updatedAt}</td>
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => startEditUser(user)}
+                              className="px-2.5 py-1 rounded bg-[var(--bg-tertiary)] border border-[var(--border-muted)] text-[var(--text-primary)] text-[10px] font-bold"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => {
+                                void resetManagedUserPassword(user);
+                              }}
+                              className="px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-bold"
+                            >
+                              Reset Password
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`Delete account for ${user.email}?`)) {
+                                  void deleteManagedUser(user);
+                                }
+                              }}
+                              className="px-2.5 py-1 rounded bg-red-950/20 border border-red-500/20 text-red-400 text-[10px] font-bold"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {managedUsers.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-10 text-center text-[var(--text-muted)]">
+                          No managed user accounts are currently available in this scope.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* TAB 6: SYSTEM AUDIT LOGS */}
         {currentTab === 'audit' && (
           <div className="space-y-6 animate-fadeIn">
@@ -1935,501 +1983,50 @@ export default function App() {
 
       </main>
 
-      {/* ==========================================
-          MODALS & DRAWERS
-         ========================================== */}
-      
-      {/* 1. STUDENT DETAIL & HISTORICAL TIMELINE DRAWER */}
-      {selectedStudent && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-filter backdrop-blur-sm flex justify-end transition-all">
-          <div className="w-full max-w-lg bg-[var(--bg-secondary)] border-l border-[var(--border-muted)] h-full overflow-y-auto p-6 flex flex-col justify-between shadow-2xl animate-slideLeft">
-            
-            <div className="space-y-6">
-              
-              {/* Drawer Header */}
-              <div className="flex justify-between items-start border-b border-[var(--border-muted)] pb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-[var(--accent-secondary)] bg-[var(--bg-tertiary)] border border-[var(--border-muted)] px-2 py-0.5 rounded">
-                      {selectedStudent.id}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                      selectedStudent.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-                    }`}>
-                      {selectedStudent.status}
-                    </span>
-                  </div>
-                  <h2 className="text-xl font-bold text-[var(--text-primary)] mt-1.5">{selectedStudent.name}</h2>
-                  <p className="text-xs text-[var(--text-muted)]">{selectedStudent.branch} Dojo Member</p>
-                </div>
-                
-                <button 
-                  onClick={() => setSelectedStudent(null)}
-                  className="p-1.5 rounded-lg border border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Student Details Grid */}
-              <div className="grid grid-cols-2 gap-4 bg-[var(--bg-tertiary)] p-4 rounded-xl border border-[var(--border-muted)] text-xs">
-                <div>
-                  <p className="text-[10px] text-[var(--text-muted)] uppercase">Parent / Contact</p>
-                  <p className="font-bold text-[var(--text-primary)] mt-0.5">{selectedStudent.parentName}</p>
-                  <p className="font-mono text-[var(--text-muted)] mt-0.5">{selectedStudent.mobile}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[var(--text-muted)] uppercase">Age Group</p>
-                  <p className="font-bold text-[var(--text-primary)] mt-0.5">{selectedStudent.age} years ({selectedStudent.category})</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[var(--text-muted)] uppercase">Joining Date</p>
-                  <p className="font-bold text-[var(--text-primary)] mt-0.5 font-mono">{selectedStudent.joiningDate}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[var(--text-muted)] uppercase">Current Rank</p>
-                  <p className="font-bold text-yellow-400 mt-0.5">{selectedStudent.currentBelt}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[var(--text-muted)] uppercase">Next Fee Due Date</p>
-                  <p className={`font-bold mt-0.5 font-mono ${
-                    new Date(selectedStudent.feeDueDate) < new Date() && selectedStudent.outstandingBalance > 0 ? 'text-red-400' : 'text-[var(--text-primary)]'
-                  }`}>{selectedStudent.feeDueDate}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[var(--text-muted)] uppercase">Ledger Balance</p>
-                  <p className={`font-extrabold mt-0.5 font-mono text-sm ${selectedStudent.outstandingBalance > 0 ? 'text-red-500' : 'text-emerald-400'}`}>
-                    ₹{selectedStudent.outstandingBalance}
-                  </p>
-                </div>
-              </div>
-
-              {/* Historical Timeline events */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
-                  Student Historical Timeline
-                </h4>
-                
-                <div className="border-l border-[var(--border-muted)] pl-4 ml-2 space-y-4">
-                  {timeline.filter(e => e.studentId === selectedStudent.id).map(e => (
-                    <div key={e.id} className="relative text-xs">
-                      {/* Timeline dot */}
-                      <span className="absolute -left-[21px] top-1.5 w-2 h-2 rounded-full bg-[var(--accent-primary)] ring-4 ring-[var(--bg-secondary)]"></span>
-                      <div className="flex justify-between items-center text-[10px] text-[var(--text-muted)] font-mono">
-                        <span>{e.date}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border-muted)]">
-                          {e.type}
-                        </span>
-                      </div>
-                      <p className="text-[var(--text-primary)] font-semibold mt-1">{e.description}</p>
-                    </div>
-                  ))}
-                  {timeline.filter(e => e.studentId === selectedStudent.id).length === 0 && (
-                    <div className="text-center py-6 text-[var(--text-muted)] italic">
-                      No historical timeline recorded yet.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </div>
-
-            {/* Actions Footer */}
-            <div className="border-t border-[var(--border-muted)] pt-4 flex gap-2">
-              {/* Reactivate button: Only if suspended (INACTIVE) and outstanding fees == 0 */}
-              {selectedStudent.status === 'INACTIVE' && (
-                <button
-                  onClick={() => {
-                    alert(`Manual reactivation is now governed by the backend billing flow. Clear the outstanding balance using a payment entry and the system will reactivate the student automatically.`);
-                  }}
-                  className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-slate-950 font-bold text-xs transition-all shadow"
-                >
-                  Reactivation Via Ledger Only
-                </button>
-              )}
-
-              {selectedStudent.status === 'ACTIVE' && canPerform(['OWNER', 'MANAGER']) && (
-                <button
-                  onClick={() => {
-                    void suspendStudent(selectedStudent);
-                  }}
-                  className="flex-1 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-all shadow"
-                >
-                  Suspend Student
-                </button>
-              )}
-              
-              {canPerform(['OWNER', 'MANAGER']) && (
-                <button
-                  onClick={() => {
-                    if (confirm(`Are you sure you want to delete ${selectedStudent.name}?`)) {
-                      void deleteStudent(selectedStudent);
-                    }
-                  }}
-                  className="p-2.5 rounded-lg bg-red-950/20 border border-red-500/20 text-red-400 hover:bg-red-900/30 text-xs transition-all"
-                  title="Remove Student Profile"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* 2. ENROLL STUDENT MODAL */}
-      {showAddStudent && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-filter backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[var(--bg-secondary)] border border-[var(--border-muted)] rounded-2xl p-6 shadow-2xl animate-scaleUp">
-            
-            <div className="flex justify-between items-center border-b border-[var(--border-muted)] pb-3 mb-4">
-              <h3 className="text-base font-bold text-[var(--text-primary)]">Enroll New Karate Student</h3>
-              <button 
-                onClick={() => setShowAddStudent(false)}
-                className="p-1 rounded-lg border border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] transition-all"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddStudent} className="space-y-4 text-xs">
-              
-              <div>
-                <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Student Full Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  required
-                  placeholder="e.g. Priyansh Malik"
-                  className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Age (Years)</label>
-                  <input
-                    type="number"
-                    name="age"
-                    required
-                    min={4}
-                    max={65}
-                    placeholder="e.g. 10"
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Dojo Category</label>
-                  <select
-                    name="category"
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  >
-                    <option value="Kids">Kids Group</option>
-                    <option value="Teens">Teens Group</option>
-                    <option value="Adults">Adults Group</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Dojo Branch</label>
-                  <select
-                    name="branch"
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  >
-                    <option value="Sirifort">Sirifort Dojo</option>
-                    <option value="Asiad">Asiad Dojo</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Initial Belt Rank</label>
-                  <select
-                    name="belt"
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  >
-                    <option value="White Belt">White Belt</option>
-                    <option value="Yellow Belt">Yellow Belt</option>
-                    <option value="Green Belt">Green Belt</option>
-                    <option value="Brown Belt">Brown Belt</option>
-                    <option value="Black Belt">Black Belt</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Parent Name</label>
-                  <input
-                    type="text"
-                    name="parentName"
-                    required
-                    placeholder="Father/Mother name"
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Mobile Contact</label>
-                  <input
-                    type="tel"
-                    name="mobile"
-                    required
-                    placeholder="10 digit phone"
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Enrollment Date</label>
-                  <input
-                    type="date"
-                    name="joiningDate"
-                    defaultValue={new Date().toISOString().split('T')[0]}
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Fee Due Date</label>
-                  <input
-                    type="date"
-                    name="dueDate"
-                    defaultValue={new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0]}
-                    required
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2.5 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-slate-950 font-bold text-xs rounded-lg hover:scale-[1.02] transition-all shadow-lg"
-              >
-                Enroll Member & Charge Monthly Tuition
-              </button>
-
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 3. ADD TRIAL LEAD MODAL */}
-      {showAddTrial && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-filter backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[var(--bg-secondary)] border border-[var(--border-muted)] rounded-2xl p-6 shadow-2xl animate-scaleUp">
-            
-            <div className="flex justify-between items-center border-b border-[var(--border-muted)] pb-3 mb-4">
-              <h3 className="text-base font-bold text-[var(--text-primary)]">Add Dojo Trial Lead</h3>
-              <button 
-                onClick={() => setShowAddTrial(false)}
-                className="p-1 rounded-lg border border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] transition-all"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddTrial} className="space-y-4 text-xs">
-              
-              <div>
-                <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Lead Student Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  required
-                  placeholder="e.g. Kabir Goel"
-                  className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Mobile Contact</label>
-                  <input
-                    type="tel"
-                    name="mobile"
-                    required
-                    placeholder="10-digit number"
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Target Dojo Branch</label>
-                  <select
-                    name="branch"
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  >
-                    <option value="Sirifort">Sirifort Dojo</option>
-                    <option value="Asiad">Asiad Dojo</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Collect Mandatory ₹500 Trial Fee?</label>
-                <select
-                  name="payMandatory"
-                  className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                >
-                  <option value="yes">Yes, ₹500 tuition fee received</option>
-                  <option value="no">No, register as unpaid lead</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2.5 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-slate-950 font-bold text-xs rounded-lg hover:scale-[1.02] transition-all shadow-lg"
-              >
-                Register Trial Lead
-              </button>
-
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 4. BILLING DIALOG MODAL (ADD CHARGE / RECORD PAYMENT) */}
-      {showBillingModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-filter backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[var(--bg-secondary)] border border-[var(--border-muted)] rounded-2xl p-6 shadow-2xl animate-scaleUp">
-            
-            <div className="flex justify-between items-center border-b border-[var(--border-muted)] pb-3 mb-4">
-              <h3 className="text-base font-bold text-[var(--text-primary)]">
-                {billingType === 'CHARGE' ? 'Create Student Tuition Charge' : 'Record Student Payment'}
-              </h3>
-              <button 
-                onClick={() => setShowBillingModal(false)}
-                className="p-1 rounded-lg border border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] transition-all"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddLedgerEntry} className="space-y-4 text-xs">
-              
-              <div>
-                <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Karate Student</label>
-                <input
-                  type="text"
-                  disabled
-                  value={students.find(s => s.id === billingStudentId)?.name || ''}
-                  className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none opacity-60"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Transaction Type</label>
-                  <select
-                    value={billingType}
-                    onChange={(e) => setBillingType(e.target.value as any)}
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                  >
-                    <option value="PAYMENT">Payment (Credit)</option>
-                    <option value="CHARGE">Charge (Debit)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Amount (₹)</label>
-                  <input
-                    type="number"
-                    required
-                    value={billingAmount}
-                    onChange={(e) => setBillingAmount(parseInt(e.target.value) || 0)}
-                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] font-mono font-bold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-[var(--text-muted)] block mb-1">Description / Memo</label>
-                <input
-                  type="text"
-                  required
-                  value={billingDesc}
-                  onChange={(e) => setBillingDesc(e.target.value)}
-                  placeholder="e.g. Monthly Tuition Fee - June 2026"
-                  className="w-full bg-[var(--bg-tertiary)] border border-[var(--border-muted)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className={`w-full py-2.5 text-slate-950 font-bold text-xs rounded-lg hover:scale-[1.02] transition-all shadow-lg ${
-                  billingType === 'PAYMENT' ? 'bg-emerald-500' : 'bg-red-500'
-                }`}
-              >
-                {billingType === 'CHARGE' ? 'Log Charge Invoices' : 'Generate Invoice Receipt'}
-              </button>
-
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 5. RECEIPT PREVIEW MODAL */}
-      {showReceipt && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-filter backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl text-slate-200">
-            
-            <div className="text-center border-b border-dashed border-slate-700 pb-4 mb-4">
-              <h2 className="text-sm font-black uppercase tracking-wider text-emerald-400">Tuition Invoice Receipt</h2>
-              <h3 className="text-lg font-bold mt-1">Zenshin Karate Academy</h3>
-              <p className="text-[10px] text-slate-400">DDA Sirifort Sports Complex, New Delhi</p>
-            </div>
-
-            <div className="space-y-3 text-xs font-semibold">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Receipt ID:</span>
-                <span className="font-mono">{showReceipt.id}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Student Name:</span>
-                <span>{showReceipt.studentName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Student ID:</span>
-                <span className="font-mono">{showReceipt.studentId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Description:</span>
-                <span>{showReceipt.description}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Transaction Date:</span>
-                <span className="font-mono">{showReceipt.createdAt}</span>
-              </div>
-
-              <div className="border-t border-dashed border-slate-700 pt-3 flex justify-between items-center">
-                <span className="text-slate-400 text-sm font-bold">Paid Total:</span>
-                <span className="text-xl font-black text-emerald-400 font-mono">₹{showReceipt.amount}</span>
-              </div>
-            </div>
-
-            <div className="mt-6 flex gap-2">
-              <button
-                onClick={() => {
-                  triggerWhatsappAlert(`💬 Simulated Whatsapp to Parent: Receipt ${showReceipt.id} generated. Amount ₹${showReceipt.amount} successfully paid for ${showReceipt.studentName}. Thank you!`);
-                  alert('Receipt share simulated over WhatsApp!');
-                }}
-                className="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-slate-950 font-bold text-xs transition-all flex items-center justify-center gap-1.5"
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                Share WhatsApp
-              </button>
-              <button
-                onClick={() => setShowReceipt(null)}
-                className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 text-xs font-bold transition-all"
-              >
-                Close
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
+      <Modals
+        currentSessionRole={currentSession.role}
+        selectedStudent={selectedStudent}
+        timeline={timeline}
+        showAddStudent={showAddStudent}
+        showAddTrial={showAddTrial}
+        showBillingModal={showBillingModal}
+        showReceipt={showReceipt}
+        students={students}
+        billingStudentId={billingStudentId}
+        billingType={billingType}
+        billingAmount={billingAmount}
+        billingDesc={billingDesc}
+        attendanceDate={attendanceDate}
+        attendanceBatch={attendanceBatch}
+        batchAttendanceState={batchAttendanceState}
+        userFormMode={userFormMode}
+        editingUserId={editingUserId}
+        userForm={userForm}
+        availableBranches={availableBranches}
+        availableRoles={availableRoles}
+        settings={settings}
+        onCloseStudent={() => setSelectedStudent(null)}
+        onSetSelectedStudent={setSelectedStudent}
+        onSetShowAddStudent={setShowAddStudent}
+        onSetShowAddTrial={setShowAddTrial}
+        onSetShowBillingModal={setShowBillingModal}
+        onSetShowReceipt={setShowReceipt}
+        onAddStudentSubmit={handleAddStudent}
+        onAddTrialSubmit={handleAddTrial}
+        onAddLedgerSubmit={handleAddLedgerEntry}
+        onSaveUser={handleUserSubmit}
+        onUserFieldChange={(next) => setUserForm((prev) => ({ ...prev, ...next }))}
+        onDeleteStudent={deleteStudent}
+        onSuspendStudent={suspendStudent}
+        onResetReceipt={() => setShowReceipt(null)}
+        onTriggerWhatsapp={triggerWhatsappAlert}
+        onSetBillingType={setBillingType}
+        onSetBillingAmount={setBillingAmount}
+        onSetBillingDesc={setBillingDesc}
+        onSetAttendanceDate={setAttendanceDate}
+        onSetAttendanceBatch={setAttendanceBatch}
+        onSetBatchAttendanceState={setBatchAttendanceState}
+      />
 
       {/* ==========================================
           FOOTER BRAND DETAILS

@@ -14,6 +14,10 @@ jest.mock('../db.js', () => {
     user: {
       findUnique: jest.fn(),
       findFirst: jest.fn().mockResolvedValue(true),
+      findMany: jest.fn(),
+      count: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
       create: jest.fn(),
     },
     branch: {
@@ -132,6 +136,37 @@ describe('ZENSHIN OS Integration Test Suite', () => {
       expect(managerRes.status).toBe(200);
       // Verify query is directed to Sirifort
       expect(prisma.branch.findUnique).toHaveBeenCalledWith({ where: { id: 'sirifort-id' } });
+    });
+
+    it('should allow managers to list only their branch users', async () => {
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+
+      const managerRes = await request(app)
+        .get('/api/users')
+        .set('Authorization', `Bearer ${managerToken}`);
+
+      expect(managerRes.status).toBe(200);
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: {
+          branchId: 'sirifort-id',
+          role: { not: 'OWNER' }
+        }
+      }));
+    });
+
+    it('should block managers from creating manager accounts', async () => {
+      const res = await request(app)
+        .post('/api/users')
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({
+          email: 'new.manager@zenshin.com',
+          name: 'New Manager',
+          password: 'securepass123',
+          role: 'MANAGER'
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('You are not allowed to create this role.');
     });
   });
 
