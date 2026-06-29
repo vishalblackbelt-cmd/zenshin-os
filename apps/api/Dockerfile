@@ -25,4 +25,4 @@ COPY --from=builder /app/node_modules ./node_modules
 ENV NODE_ENV=production
 ENV PORT=4000
 EXPOSE 4000
-CMD ["npm", "start", "-w", "apps/api"]
+CMD ["sh", "-c", "npm run db:migrate:deploy -w apps/api && npm start -w apps/api"]

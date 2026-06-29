@@ -48,6 +48,13 @@ Verify and generate the Prisma Client:
 npm run generate -w packages/db
 ```
 
+Create a migration when the Prisma schema changes in development:
+```bash
+npm run db:migrate:dev -w apps/api -- --name <migration_name>
+```
+
+The API dev startup now applies committed migrations with `prisma migrate deploy` before booting the watcher. That means the database is migration-based rather than schema-pushed.
+
 ### 5. Running the Application Locally
 To run both backend API and React frontend simultaneously:
 ```bash
@@ -56,7 +63,7 @@ npm run dev
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:4000
 
-In development mode, the API startup automatically runs Prisma schema sync (`prisma db push`) before launching the server watcher, so first-time runs do not fail with missing table errors during seeding.
+In development mode, the API startup automatically runs committed Prisma migrations (`prisma migrate deploy`) before launching the server watcher, so first-time runs do not fail with missing table errors during seeding.
 If `DEFAULT_SEED_PASSWORD` is set, development seed accounts are created for `owner@zenshin.com`, `sirifort@zenshin.com`, `asiad@zenshin.com`, and `instructor@zenshin.com` using that password.
 
 ### 6. User Administration
@@ -76,6 +83,7 @@ The application will be accessible at:
 - **Backend API**: http://localhost:4000
 
 This mode is production-style: the web app is served by Nginx and the API runs compiled output. It does **not** provide frontend HMR or backend watch reload.
+On startup, the API container applies the committed Prisma migrations before launching the server, so the database stays aligned with the checked-in schema history.
 The API waits for PostgreSQL readiness before booting and reads JWT/CORS/seed settings from the root `.env` file.
 
 ---
@@ -94,7 +102,7 @@ The `docker-compose.dev.yml` override is optional, but necessary if you want con
 
 The dev override uses dedicated development images for API and Web plus separate `node_modules` volumes per service to avoid dependency corruption/race conditions during startup.
 
-The API dev container also applies schema changes automatically before boot to prevent Prisma `P2021` table-not-found errors during seed initialization.
+The API dev container also applies committed Prisma migrations automatically before boot to prevent Prisma `P2021` table-not-found errors during seed initialization.
 
 If you previously built old images/volumes and still see Prisma/OpenSSL errors, reset and rebuild:
 ```bash
