@@ -53,7 +53,7 @@ npm run dev
 
 ---
 
-## Running with Docker Compose
+## Running with Docker Compose (Production-style)
 To build and launch the entire stack (Postgres database, API server, and web frontend):
 ```bash
 docker-compose up --build
@@ -61,6 +61,28 @@ docker-compose up --build
 The application will be accessible at:
 - **Frontend**: http://localhost
 - **Backend API**: http://localhost:4000
+
+This mode is production-style: the web app is served by Nginx and the API runs compiled output. It does **not** provide frontend HMR or backend watch reload.
+
+---
+
+## Running with Docker Compose (Development + Hot Reload)
+Use the dev override file when you want live code reload in containers:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+The application will be accessible at:
+- **Frontend (Vite HMR)**: http://localhost:3000
+- **Backend API**: http://localhost:4000
+
+The `docker-compose.dev.yml` override is optional, but necessary if you want containerized development behavior (watch mode + HMR). If you do not need Docker for development, use `npm run dev` locally.
+
+If you previously built old images/volumes and still see Prisma/OpenSSL errors, reset and rebuild:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
 
 ---
 

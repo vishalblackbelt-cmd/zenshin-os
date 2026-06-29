@@ -1,5 +1,6 @@
-FROM node:22-alpine AS builder
+FROM node:22-bookworm-slim AS builder
 WORKDIR /app
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY package*.json tsconfig.json ./
 COPY packages/db/package*.json packages/db/tsconfig.json ./packages/db/
 COPY apps/api/package*.json apps/api/tsconfig.json ./apps/api/
@@ -10,8 +11,9 @@ RUN npx prisma generate --schema=./packages/db/prisma/schema.prisma
 RUN npm run build -w packages/db
 RUN npm run build -w apps/api
 
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 WORKDIR /app
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY package*.json tsconfig.json ./
 COPY packages/db/package*.json ./packages/db/
 COPY apps/api/package*.json ./apps/api/

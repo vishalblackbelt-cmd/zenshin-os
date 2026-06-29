@@ -1,0 +1,25 @@
+services:
+  api:
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/zenshin?schema=public"
+      JWT_SECRET: "zenshin_secret_key_12345"
+      JWT_REFRESH_SECRET: "zenshin_refresh_secret_key_12345"
+      PORT: 4000
+      NODE_ENV: development
+    command: sh -c "npm install --legacy-peer-deps && npm run generate -w packages/db && npm run dev -w apps/api"
+    volumes:
+      - .:/app
+      - zenshin_node_modules:/app/node_modules
+    ports:
+      - "4000:4000"
+
+  web:
+    command: sh -c "npm install --legacy-peer-deps && npm run dev -w apps/web -- --host 0.0.0.0 --port 3000"
+    volumes:
+      - .:/app
+      - zenshin_node_modules:/app/node_modules
+    ports:
+      - "3000:3000"
+
+volumes:
+  zenshin_node_modules:
