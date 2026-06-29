@@ -74,6 +74,10 @@ router.post('/', requireRole(['OWNER', 'MANAGER']), requireBranchAccess, async (
       return res.status(400).json({ error: 'Invalid branch name specified' });
     }
 
+    if (req.user!.role === 'MANAGER' && req.user!.branchId && req.user!.branchId !== branch.id) {
+      return res.status(403).json({ error: 'Managers can only enroll students in their own branch' });
+    }
+
     // Generate student ID sequentially
     const prefix = branch.name === 'Sirifort' ? 'ZD' : 'AD';
     const count = await prisma.student.count({ where: { branchId: branch.id } });

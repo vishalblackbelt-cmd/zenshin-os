@@ -27,7 +27,12 @@ export function loadFromStorage<T>(key: string, initial: T): T {
     return initial;
   }
 
-  return JSON.parse(data) as T;
+  try {
+    return JSON.parse(data) as T;
+  } catch {
+    localStorage.setItem(key, JSON.stringify(initial));
+    return initial;
+  }
 }
 
 export function saveToStorage<T>(key: string, data: T): void {

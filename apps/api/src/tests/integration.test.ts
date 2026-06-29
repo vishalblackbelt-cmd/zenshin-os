@@ -1,4 +1,3 @@
-// @ts-nocheck
 /// <reference types="jest" />
 
 import request from 'supertest';
@@ -10,7 +9,9 @@ import { sendWhatsAppMessage } from '../services/whatsapp.js';
 
 // Mock the Prisma client
 jest.mock('../db.js', () => {
-  const mockPrisma: any = {
+  const mockPrisma: Record<string, any> = {};
+
+  Object.assign(mockPrisma, {
     user: {
       findUnique: jest.fn(),
       findFirst: jest.fn().mockResolvedValue(true),
@@ -22,7 +23,7 @@ jest.mock('../db.js', () => {
     },
     branch: {
       findUnique: jest.fn(),
-      upsert: jest.fn().mockImplementation((args: any) => {
+      upsert: jest.fn().mockImplementation((args: { create?: { name?: string } }) => {
         return Promise.resolve({
           id: args?.create?.name === 'Asiad' ? 'asiad-id' : 'sirifort-id',
           name: args?.create?.name || 'Sirifort'
@@ -55,13 +56,17 @@ jest.mock('../db.js', () => {
       create: jest.fn(),
       findMany: jest.fn(),
     },
-    $transaction: jest.fn((arg: any): any => {
+    $transaction: jest.fn((arg: unknown): Promise<unknown> | unknown => {
       if (typeof arg === 'function') {
-        return arg(mockPrisma);
+        return (arg as (tx: Record<string, any>) => unknown)(mockPrisma);
       }
-      return Promise.all(arg);
+      if (Array.isArray(arg)) {
+        return Promise.all(arg);
+      }
+      return Promise.resolve(arg);
     }),
-  };
+  });
+
   return { prisma: mockPrisma };
 });
 
