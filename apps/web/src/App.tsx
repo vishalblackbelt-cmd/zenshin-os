@@ -169,12 +169,12 @@ export default function App() {
   const [loginPending, setLoginPending] = useState(false);
 
   // DB States
-  const [students, setStudents] = useState<Student[]>(() => loadFromStorage('zenshin-students', INITIAL_STUDENTS));
-  const [trials, setTrials] = useState<TrialLead[]>(() => loadFromStorage('zenshin-trials', INITIAL_TRIALS));
-  const [ledger, setLedger] = useState<LedgerEntry[]>(() => loadFromStorage('zenshin-ledger', INITIAL_LEDGER));
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => loadFromStorage('zenshin-audit', INITIAL_AUDIT));
-  const [timeline, setTimeline] = useState<TimelineEvent[]>(() => loadFromStorage('zenshin-timeline', INITIAL_TIMELINE));
-  const [settings, setSettings] = useState<SystemSettings>(() => loadFromStorage('zenshin-settings', INITIAL_SETTINGS));
+  const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
+  const [trials, setTrials] = useState<TrialLead[]>(INITIAL_TRIALS);
+  const [ledger, setLedger] = useState<LedgerEntry[]>(INITIAL_LEDGER);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>(INITIAL_TIMELINE);
+  const [settings, setSettings] = useState<SystemSettings>(INITIAL_SETTINGS);
 
   // Router simulation
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'students' | 'attendance' | 'trials' | 'billing' | 'audit'>('dashboard');
@@ -204,31 +204,6 @@ export default function App() {
   // WhatsApp simulation toast
   const [whatsappToast, setWhatsappToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
 
-  // Sync to local storage
-  useEffect(() => {
-    saveToStorage('zenshin-students', students);
-  }, [students]);
-
-  useEffect(() => {
-    saveToStorage('zenshin-trials', trials);
-  }, [trials]);
-
-  useEffect(() => {
-    saveToStorage('zenshin-ledger', ledger);
-  }, [ledger]);
-
-  useEffect(() => {
-    saveToStorage('zenshin-audit', auditLogs);
-  }, [auditLogs]);
-
-  useEffect(() => {
-    saveToStorage('zenshin-timeline', timeline);
-  }, [timeline]);
-
-  useEffect(() => {
-    saveToStorage('zenshin-settings', settings);
-  }, [settings]);
-
   useEffect(() => {
     saveToStorage('zenshin-session', currentSession);
   }, [currentSession]);
@@ -251,31 +226,256 @@ export default function App() {
     }, 5000);
   };
 
-  // Log audit event helper
-  const logAudit = (action: string, details: string, branch: Branch | 'GLOBAL') => {
-    const newLog: AuditLog = {
-      id: 'A' + Math.floor(Math.random() * 10000),
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      actor: currentSession?.name || 'SYSTEM',
-      role: currentSession?.role || 'OWNER',
-      action,
-      details,
-      branch
-    };
-    setAuditLogs(prev => [newLog, ...prev]);
+  const resetAppData = () => {
+    setStudents(INITIAL_STUDENTS);
+    setTrials(INITIAL_TRIALS);
+    setLedger(INITIAL_LEDGER);
+    setAuditLogs(INITIAL_AUDIT);
+    setTimeline(INITIAL_TIMELINE);
+    setSettings(INITIAL_SETTINGS);
+    setSelectedStudent(null);
+    setShowReceipt(null);
   };
 
-  // Log timeline event helper
-  const logTimeline = (studentId: string, type: string, description: string) => {
-    const newEvent: TimelineEvent = {
-      id: 'E' + Math.floor(Math.random() * 10000),
-      studentId,
-      date: new Date().toISOString().split('T')[0],
-      type,
-      description
-    };
-    setTimeline(prev => [newEvent, ...prev]);
+  const formatDate = (value: string | Date) => new Date(value).toISOString().split('T')[0];
+  const formatTimestamp = (value: string | Date) => new Date(value).toISOString().replace('T', ' ').substring(0, 19);
+
+  const mapStudent = (student: any): Student => ({
+    id: student.id,
+    name: student.name,
+    age: student.age,
+    category: student.category,
+    parentName: student.parentName,
+    mobile: student.mobile,
+    branch: student.branch?.name ?? student.branch,
+    joiningDate: formatDate(student.joiningDate),
+    currentBelt: student.currentBelt,
+    status: student.status,
+    feeDueDate: formatDate(student.feeDueDate),
+    examEligible: student.examEligible,
+    outstandingBalance: student.outstandingBalance,
+    attendanceRate: student.attendanceRate
+  });
+
+  const mapTrial = (trial: any): TrialLead => ({
+    id: trial.id,
+    name: trial.name,
+    mobile: trial.mobile,
+    branch: trial.branch?.name ?? trial.branch,
+    status: trial.status,
+    paidAmount: trial.paidAmount,
+    createdAt: formatDate(trial.createdAt)
+  });
+
+  const mapLedgerEntry = (entry: any): LedgerEntry => ({
+    id: entry.id,
+    studentId: entry.studentId,
+    studentName: entry.student?.name ?? '',
+    type: entry.type,
+    amount: entry.amount,
+    description: entry.description,
+    createdAt: formatTimestamp(entry.createdAt)
+  });
+
+  const mapAuditLog = (entry: any): AuditLog => ({
+    id: entry.id,
+    timestamp: formatTimestamp(entry.timestamp),
+    actor: entry.actor,
+    role: entry.role,
+    action: entry.action,
+    details: entry.details,
+    branch: entry.branch?.name ?? 'GLOBAL'
+  });
+
+  const mapTimelineEvent = (entry: any): TimelineEvent => ({
+    id: entry.id,
+    studentId: entry.studentId,
+    date: formatDate(entry.date),
+    type: entry.type,
+    description: entry.description
+  });
+
+  const mapReceipt = (receipt: any): LedgerEntry => ({
+    id: receipt.receiptId,
+    studentId: receipt.studentId,
+    studentName: receipt.studentName,
+    type: 'PAYMENT',
+    amount: receipt.amount,
+    description: receipt.description,
+    createdAt: formatTimestamp(receipt.transactionDate)
+  });
+
+  const refreshAccessToken = async () => {
+    if (!currentSession?.refreshToken) {
+      throw new Error('Session expired. Please sign in again.');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ refreshToken: currentSession.refreshToken })
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || 'Session refresh failed.');
+    }
+
+    const nextSession = currentSession ? { ...currentSession, accessToken: payload.accessToken } : null;
+    setCurrentSession(nextSession);
+    saveToStorage('zenshin-session', nextSession);
+
+    return payload.accessToken as string;
   };
+
+  const apiRequest = async <T,>(path: string, init?: RequestInit, allowRetry = true): Promise<T> => {
+    const headers = new Headers(init?.headers);
+    headers.set('Accept', 'application/json');
+
+    if (init?.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    if (currentSession?.accessToken) {
+      headers.set('Authorization', `Bearer ${currentSession.accessToken}`);
+    }
+
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers
+    });
+
+    const payload = response.status === 204 ? null : await response.json().catch(() => null);
+
+    if ((response.status === 401 || response.status === 403) && allowRetry && currentSession?.refreshToken) {
+      const nextAccessToken = await refreshAccessToken();
+      const retryHeaders = new Headers(init?.headers);
+      retryHeaders.set('Accept', 'application/json');
+      if (init?.body && !retryHeaders.has('Content-Type')) {
+        retryHeaders.set('Content-Type', 'application/json');
+      }
+      retryHeaders.set('Authorization', `Bearer ${nextAccessToken}`);
+
+      const retryResponse = await fetch(`${API_BASE_URL}${path}`, {
+        ...init,
+        headers: retryHeaders
+      });
+      const retryPayload = retryResponse.status === 204 ? null : await retryResponse.json().catch(() => null);
+
+      if (!retryResponse.ok) {
+        throw new Error(retryPayload?.error || 'Request failed.');
+      }
+
+      return retryPayload as T;
+    }
+
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Request failed.');
+    }
+
+    return payload as T;
+  };
+
+  const loadAppData = async () => {
+    if (!currentSession) {
+      resetAppData();
+      return;
+    }
+
+    try {
+      const [studentsPayload, ledgerPayload, settingsPayload] = await Promise.all([
+        apiRequest<any[]>('/api/students'),
+        apiRequest<any[]>('/api/billing/ledger'),
+        apiRequest<SystemSettings>('/api/billing/settings')
+      ]);
+
+      setStudents(studentsPayload.map(mapStudent));
+      setLedger(ledgerPayload.map(mapLedgerEntry));
+      setSettings(settingsPayload);
+
+      if (currentSession.role === 'OWNER' || currentSession.role === 'MANAGER') {
+        const [trialsPayload, auditPayload] = await Promise.all([
+          apiRequest<any[]>('/api/trials'),
+          apiRequest<any[]>('/api/audit')
+        ]);
+
+        setTrials(trialsPayload.map(mapTrial));
+        setAuditLogs(auditPayload.map(mapAuditLog));
+      } else {
+        setTrials(INITIAL_TRIALS);
+        setAuditLogs(INITIAL_AUDIT);
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to load application data.');
+    }
+  };
+
+  const openStudentDetail = async (studentId: string) => {
+    try {
+      const studentPayload = await apiRequest<any>(`/api/students/${studentId}`);
+      setSelectedStudent(mapStudent(studentPayload));
+      setTimeline((studentPayload.timelineEvents || []).map(mapTimelineEvent));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to load student details.');
+    }
+  };
+
+  const openLatestReceipt = async () => {
+    const latestPayment = [...ledger].reverse().find((item) => item.type === 'PAYMENT');
+
+    if (!latestPayment) {
+      alert('No payment receipt is available yet.');
+      return;
+    }
+
+    try {
+      const receipt = await apiRequest<any>(`/api/billing/ledger/${latestPayment.id}/receipt`);
+      setShowReceipt(mapReceipt(receipt));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to load receipt.');
+    }
+  };
+
+  const deleteStudent = async (student: Student) => {
+    try {
+      await apiRequest(`/api/students/${student.id}`, {
+        method: 'DELETE'
+      });
+      await loadAppData();
+      setSelectedStudent(null);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to delete student.');
+    }
+  };
+
+  const suspendStudent = async (student: Student) => {
+    try {
+      await apiRequest(`/api/students/${student.id}/suspend`, {
+        method: 'POST'
+      });
+      await loadAppData();
+      await openStudentDetail(student.id);
+      alert('Student suspended successfully.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to suspend student.');
+    }
+  };
+
+  const clearClientLogView = () => {
+    setAuditLogs(INITIAL_AUDIT);
+    setTimeline(INITIAL_TIMELINE);
+  };
+
+  useEffect(() => {
+    if (currentSession?.branch) {
+      setActiveBranch(currentSession.branch);
+    }
+
+    void loadAppData();
+  }, [currentSession?.id]);
 
   // Check RBAC Permissions
   const canPerform = (requiredRoles: Role[]) => {
@@ -310,176 +510,82 @@ export default function App() {
     });
   };
 
-  // Generate Unique Student ID
-  const generateStudentId = (branch: Branch) => {
-    const prefix = branch === 'Sirifort' ? 'ZD' : 'AD';
-    const count = students.filter(s => s.branch === branch).length + 1;
-    return `${prefix}${String(count).padStart(4, '0')}`;
-  };
-
   // ==========================================
   // HANDLERS
   // ==========================================
 
   // Daily Cron Job Simulation Trigger
-  const runCronJobSimulation = () => {
-    let suspensionCount = 0;
-    let friendlyReminders = 0;
-    let overdueReminders = 0;
-
-    const today = new Date();
-    const updatedStudents = students.map(student => {
-      const dueDate = new Date(student.feeDueDate);
-      const diffTime = dueDate.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // Days until due date
-      
-      let updatedStatus = student.status;
-      let updatedBalance = student.outstandingBalance;
-
-      // Suspension logic: 10 days after due date (i.e. diffDays <= -10)
-      if (diffDays <= -settings.maxGracePeriod && student.status === 'ACTIVE') {
-        updatedStatus = 'INACTIVE';
-        // Add ₹1000 reactivation fee and log charges
-        const chargeAmount = settings.reactivationCharge;
-        updatedBalance += chargeAmount;
-        
-        suspensionCount++;
-
-        // Add ledger entry
-        const ledgerId = 'L' + Math.floor(Math.random() * 10000);
-        const newLedger: LedgerEntry = {
-          id: ledgerId,
-          studentId: student.id,
-          studentName: student.name,
-          type: 'CHARGE',
-          amount: chargeAmount,
-          description: `Reactivation Charge (Suspended ${Math.abs(diffDays)} days overdue)`,
-          createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19)
-        };
-        
-        setTimeout(() => {
-          setLedger(prev => [...prev, newLedger]);
-          logTimeline(student.id, 'STUDENT_SUSPENDED', `Suspended automatically. Reactivation fee of ₹${chargeAmount} charged.`);
-          logAudit('STUDENT_SUSPENDED', `Student ${student.name} (${student.id}) suspended automatically.`, student.branch);
-          logAudit('WHATSAPP_REMOVED', `Suspended student ${student.id} removed from broadcasts.`, student.branch);
-          
-          // Send simulated suspension whatsapp
-          triggerWhatsappAlert(`🚨 Whatsapp Alert to ${student.parentName} (${student.mobile}): Student ${student.name} (${student.id}) is SUSPENDED due to fees overdue by ${Math.abs(diffDays)} days. Access blocked. Reactivation fee of ₹${chargeAmount} applies.`);
-        }, 100);
-
-      } else if (diffDays === 5 && student.status === 'ACTIVE') {
-        friendlyReminders++;
-        setTimeout(() => {
-          logTimeline(student.id, 'FRIENDLY_REMINDER_SENT', `Friendly reminder sent. Fees due in 5 days.`);
-          logAudit('FRIENDLY_REMINDER_SENT', `Friendly WhatsApp alert generated for ${student.id}.`, student.branch);
-          triggerWhatsappAlert(`💬 Whatsapp Friendly Alert to ${student.parentName} (${student.mobile}): Reminder that ₹3600 tuition fees for ${student.name} is due in 5 days (${student.feeDueDate}).`);
-        }, 100);
-
-      } else if (diffDays === -5 && student.status === 'ACTIVE') {
-        overdueReminders++;
-        setTimeout(() => {
-          logTimeline(student.id, 'OVERDUE_REMINDER_SENT', `Overdue warning sent. Fees overdue by 5 days.`);
-          logAudit('OVERDUE_REMINDER_SENT', `Overdue WhatsApp warning generated for ${student.id}.`, student.branch);
-          triggerWhatsappAlert(`⚠️ Whatsapp Overdue Alert to ${student.parentName} (${student.mobile}): WARNING: tuition fees for ${student.name} is overdue by 5 days. Please settle outstanding to avoid suspension.`);
-        }, 100);
-      }
-
-      return {
-        ...student,
-        status: updatedStatus,
-        outstandingBalance: updatedBalance
-      };
-    });
-
-    setStudents(updatedStudents);
-    logAudit('CRON_SIMULATION_RUN', `Manual Financial Discipline Engine Cron completed. Suspensions: ${suspensionCount}, Friendly: ${friendlyReminders}, Overdue: ${overdueReminders}`, 'GLOBAL');
-    
-    alert(`Financial Discipline Engine execution finished!\nSuspensions Triggered: ${suspensionCount}\nFriendly Reminders: ${friendlyReminders}\nOverdue Reminders: ${overdueReminders}`);
+  const runCronJobSimulation = async () => {
+    try {
+      const result = await apiRequest<{ results: { suspensions: number; friendlyReminders: number; overdueReminders: number } }>('/api/cron/trigger', {
+        method: 'POST'
+      });
+      await loadAppData();
+      alert(`Financial Discipline Engine execution finished!\nSuspensions Triggered: ${result.results.suspensions}\nFriendly Reminders: ${result.results.friendlyReminders}\nOverdue Reminders: ${result.results.overdueReminders}`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to execute cron simulation.');
+    }
   };
 
   // Add new student
-  const handleAddStudent = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddStudent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const branchVal = formData.get('branch') as Branch;
-    const studentId = generateStudentId(branchVal);
-    
-    const newStudent: Student = {
-      id: studentId,
-      name: formData.get('name') as string,
-      age: parseInt(formData.get('age') as string) || 10,
-      category: formData.get('category') as string,
-      parentName: formData.get('parentName') as string,
-      mobile: formData.get('mobile') as string,
-      branch: branchVal,
-      joiningDate: formData.get('joiningDate') as string || new Date().toISOString().split('T')[0],
-      currentBelt: formData.get('belt') as string,
-      status: 'ACTIVE',
-      feeDueDate: formData.get('dueDate') as string,
-      examEligible: true,
-      outstandingBalance: 3600, // Monthly charge
-      attendanceRate: 100
-    };
-
-    setStudents(prev => [...prev, newStudent]);
-    
-    // Create initial monthly ledger charge
-    const chargeEntry: LedgerEntry = {
-      id: 'L' + Math.floor(Math.random() * 10000),
-      studentId: studentId,
-      studentName: newStudent.name,
-      type: 'CHARGE',
-      amount: 3600,
-      description: 'First Month Membership Tuition Fee',
-      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19)
-    };
-    
-    setLedger(prev => [...prev, chargeEntry]);
-    logTimeline(studentId, 'STUDENT_JOINED', 'Student enrolled and membership started.');
-    logAudit('STUDENT_ADD', `Enrolled new student ${newStudent.name} with ID ${studentId}.`, branchVal);
-    setShowAddStudent(false);
+    try {
+      await apiRequest('/api/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: formData.get('name'),
+          age: formData.get('age'),
+          category: formData.get('category'),
+          parentName: formData.get('parentName'),
+          mobile: formData.get('mobile'),
+          branchName: formData.get('branch'),
+          currentBelt: formData.get('belt'),
+          feeDueDate: formData.get('dueDate')
+        })
+      });
+      await loadAppData();
+      setShowAddStudent(false);
+      e.currentTarget.reset();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to enroll student.');
+    }
   };
 
   // Add new Trial Lead
-  const handleAddTrial = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddTrial = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
-    const newTrial: TrialLead = {
-      id: 'T' + Math.floor(Math.random() * 1000),
-      name: formData.get('name') as string,
-      mobile: formData.get('mobile') as string,
-      branch: formData.get('branch') as Branch,
-      status: formData.get('payMandatory') === 'yes' ? 'PAID' : 'NEW',
-      paidAmount: formData.get('payMandatory') === 'yes' ? 500 : 0,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    setTrials(prev => [...prev, newTrial]);
-    logAudit('TRIAL_ADD', `Added trial lead ${newTrial.name} for branch ${newTrial.branch}. Status: ${newTrial.status}.`, newTrial.branch);
-    setShowAddTrial(false);
+    try {
+      await apiRequest('/api/trials', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: formData.get('name'),
+          mobile: formData.get('mobile'),
+          branchName: formData.get('branch'),
+          payMandatory: formData.get('payMandatory')
+        })
+      });
+      await loadAppData();
+      setShowAddTrial(false);
+      e.currentTarget.reset();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to register trial lead.');
+    }
   };
 
   // Update Trial Lead status (mandating ₹500 fee verification for JOINED status)
-  const updateTrialStatus = (trialId: string, newStatus: TrialStatus) => {
-    const trial = trials.find(t => t.id === trialId);
-    if (!trial) return;
-
-    if (newStatus === 'JOINED' && trial.status !== 'PAID') {
-      alert('⚠️ Lead cannot convert to JOINED status. The ₹500 mandatory trial fee must be PAID first!');
-      return;
+  const updateTrialStatus = async (trialId: string, newStatus: TrialStatus) => {
+    try {
+      await apiRequest(`/api/trials/${trialId}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: newStatus })
+      });
+      await loadAppData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update trial status.');
     }
-
-    setTrials(prev => prev.map(t => {
-      if (t.id === trialId) {
-        let updatedPaid = t.paidAmount;
-        if (newStatus === 'PAID') updatedPaid = 500;
-        return { ...t, status: newStatus, paidAmount: updatedPaid };
-      }
-      return t;
-    }));
-
-    logAudit('TRIAL_UPDATE', `Updated trial lead ${trial.name} status to ${newStatus}.`, trial.branch);
   };
 
   // Open billing log window
@@ -492,64 +598,31 @@ export default function App() {
   };
 
   // Submit new ledger item
-  const handleAddLedgerEntry = (e: React.FormEvent) => {
+  const handleAddLedgerEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     const student = students.find(s => s.id === billingStudentId);
     if (!student) return;
 
-    const entryId = 'L' + Math.floor(Math.random() * 10000);
-    const newEntry: LedgerEntry = {
-      id: entryId,
-      studentId: student.id,
-      studentName: student.name,
-      type: billingType,
-      amount: billingAmount,
-      description: billingDesc,
-      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19)
-    };
+    try {
+      const entry = await apiRequest<any>('/api/billing/ledger', {
+        method: 'POST',
+        body: JSON.stringify({
+          studentId: student.id,
+          type: billingType,
+          amount: billingAmount,
+          description: billingDesc
+        })
+      });
 
-    // Calculate new outstanding balance
-    const updatedStudents = students.map(s => {
-      if (s.id === student.id) {
-        let currentBalance = s.outstandingBalance;
-        if (billingType === 'CHARGE') {
-          currentBalance += billingAmount;
-        } else {
-          currentBalance -= billingAmount;
-        }
+      await loadAppData();
+      setShowBillingModal(false);
 
-        // Reactivation checks
-        let newStatus = s.status;
-        if (s.status === 'INACTIVE' && currentBalance === 0) {
-          newStatus = 'ACTIVE';
-          setTimeout(() => {
-            logTimeline(s.id, 'STUDENT_REACTIVATED', `Student reactivated. Balance settled to ₹0.`);
-            logAudit('STUDENT_REACTIVATED', `Student ${s.name} (${s.id}) reactivated. Outstanding balance resolved.`, s.branch);
-            logAudit('WHATSAPP_RESTORED', `Reactivated student ${s.id} restored to whatsapp broadcasts.`, s.branch);
-            triggerWhatsappAlert(`🎉 Whatsapp Alert to ${s.parentName} (${s.mobile}): Welcome back! Student ${s.name} (${s.id}) reactivation complete. All services and portal access restored.`);
-          }, 100);
-        }
-
-        return {
-          ...s,
-          outstandingBalance: currentBalance,
-          status: newStatus
-        };
+      if (billingType === 'PAYMENT') {
+        const receipt = await apiRequest<any>(`/api/billing/ledger/${entry.id}/receipt`);
+        setShowReceipt(mapReceipt(receipt));
       }
-      return s;
-    });
-
-    setLedger(prev => [...prev, newEntry]);
-    setStudents(updatedStudents);
-    logAudit(billingType === 'CHARGE' ? 'CHARGE_LOGGED' : 'PAYMENT_RECEIVED', 
-             `${billingType} of ₹${billingAmount} recorded for ${student.id} (${billingDesc})`, student.branch);
-    logTimeline(student.id, billingType === 'CHARGE' ? 'CHARGE_LOGGED' : 'PAYMENT_RECEIVED', 
-                `${billingType} of ₹${billingAmount} recorded: ${billingDesc}`);
-
-    setShowBillingModal(false);
-
-    if (billingType === 'PAYMENT') {
-      setShowReceipt(newEntry);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to record ledger entry.');
     }
   };
 
@@ -566,40 +639,37 @@ export default function App() {
   }, [activeBranch, attendanceBatch, students]);
 
   // Submit batch attendance
-  const submitBatchAttendance = () => {
+  const submitBatchAttendance = async () => {
     let presentCount = 0;
     let lateCount = 0;
     let absentCount = 0;
 
-    Object.entries(batchAttendanceState).forEach(([studentId, status]) => {
-      const student = students.find(s => s.id === studentId);
-      if (!student) return;
-
+    const records = Object.entries(batchAttendanceState).map(([studentId, status]) => {
       if (status === 'PRESENT') presentCount++;
       if (status === 'LATE') lateCount++;
       if (status === 'ABSENT') absentCount++;
 
-      // Update individual student attendance Rate
-      setStudents(prev => prev.map(s => {
-        if (s.id === studentId) {
-          const currentRate = s.attendanceRate;
-          const newRate = status === 'ABSENT' 
-            ? Math.max(50, Math.round(currentRate * 0.95)) 
-            : Math.min(100, Math.round(currentRate * 1.02 || 100));
-          return { ...s, attendanceRate: newRate };
-        }
-        return s;
-      }));
+      return { studentId, status };
     });
 
-    logAudit('ATTENDANCE_MARKED', 
-             `Batch Attendance submitted for ${attendanceBatch} on ${attendanceDate}. Present: ${presentCount}, Late: ${lateCount}, Absent: ${absentCount}`, 
-             activeBranch);
-    alert(`Success!\nBatch Attendance recorded.\nPresent: ${presentCount}\nLate: ${lateCount}\nAbsent: ${absentCount}`);
+    try {
+      await apiRequest('/api/attendance', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: attendanceDate,
+          batch: attendanceBatch,
+          records
+        })
+      });
+      await loadAppData();
+      alert(`Success!\nBatch Attendance recorded.\nPresent: ${presentCount}\nLate: ${lateCount}\nAbsent: ${absentCount}`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to submit attendance.');
+    }
   };
 
   // Toggle settings panel
-  const handleUpdateSettings = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleUpdateSettings = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canPerform(['OWNER'])) {
       alert('Unauthorized! Only system Owners can mutate discipline configs.');
@@ -610,9 +680,16 @@ export default function App() {
       maxGracePeriod: parseInt(formData.get('maxGracePeriod') as string) || 10,
       reactivationCharge: parseInt(formData.get('reactivationCharge') as string) || 1000
     };
-    setSettings(newSettings);
-    logAudit('SETTINGS_CHANGED', `Financial Discipline Settings modified: Grace Period = ${newSettings.maxGracePeriod} days, Reactivation = ₹${newSettings.reactivationCharge}`, 'GLOBAL');
-    alert('System settings updated successfully!');
+    try {
+      await apiRequest('/api/billing/settings', {
+        method: 'PUT',
+        body: JSON.stringify(newSettings)
+      });
+      await loadAppData();
+      alert('System settings updated successfully!');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update settings.');
+    }
   };
 
   // Login handler
@@ -675,20 +752,9 @@ export default function App() {
 
   // Logout handler
   const handleLogout = () => {
-    if (currentSession) {
-      const newLog: AuditLog = {
-        id: 'A' + Math.floor(Math.random() * 10000),
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        actor: currentSession.name,
-        role: currentSession.role,
-        action: 'LOGOUT',
-        details: `${currentSession.role} logged out successfully.`,
-        branch: currentSession.branch || 'GLOBAL'
-      };
-      setAuditLogs(prev => [newLog, ...prev]);
-    }
     localStorage.removeItem('zenshin-session');
     setCurrentSession(null);
+    resetAppData();
   };
 
   // ==========================================
@@ -1295,7 +1361,9 @@ export default function App() {
                         <tr 
                           key={student.id} 
                           className="hover:bg-[var(--bg-secondary)]/50 transition-all cursor-pointer"
-                          onClick={() => setSelectedStudent(student)}
+                          onClick={() => {
+                            void openStudentDetail(student.id);
+                          }}
                         >
                           <td className="py-3.5 px-5 font-mono text-[var(--accent-secondary)]">{student.id}</td>
                           <td className="py-3.5 px-5">
@@ -1762,9 +1830,7 @@ export default function App() {
                   </div>
                   <button 
                     onClick={() => {
-                      if (ledger.length > 0) {
-                        setShowReceipt(ledger[ledger.length - 1]);
-                      }
+                      void openLatestReceipt();
                     }}
                     className="px-3 py-1 bg-[var(--bg-tertiary)] border border-[var(--border-muted)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs rounded-lg font-bold transition-all"
                   >
@@ -1820,10 +1886,7 @@ export default function App() {
                   </p>
                 </div>
                 <button
-                  onClick={() => {
-                    setAuditLogs(INITIAL_AUDIT);
-                    setTimeline(INITIAL_TIMELINE);
-                  }}
+                  onClick={clearClientLogView}
                   className="px-3.5 py-1.5 bg-red-950/20 hover:bg-red-900/30 text-red-400 text-xs border border-red-500/20 rounded-lg font-bold transition-all"
                 >
                   Reset Log State
@@ -1978,27 +2041,22 @@ export default function App() {
               {selectedStudent.status === 'INACTIVE' && (
                 <button
                   onClick={() => {
-                    if (selectedStudent.outstandingBalance > 0) {
-                      alert(`⚠️ Cannot Reactivate!\nOutstanding balance is ₹${selectedStudent.outstandingBalance}.\nAccording to the Financial Discipline Engine, reactivation is blocked until the ledger balance is zero. Settle remaining fees first.`);
-                    } else {
-                      // Reactivate student
-                      setStudents(prev => prev.map(s => {
-                        if (s.id === selectedStudent.id) {
-                          return { ...s, status: 'ACTIVE' };
-                        }
-                        return s;
-                      }));
-                      setSelectedStudent(prev => prev ? { ...prev, status: 'ACTIVE' } : null);
-                      logTimeline(selectedStudent.id, 'STUDENT_REACTIVATED', 'Student reactivated. Account successfully restored.');
-                      logAudit('STUDENT_REACTIVATED', `Student ${selectedStudent.name} (${selectedStudent.id}) reactivated.`, selectedStudent.branch);
-                      logAudit('WHATSAPP_RESTORED', `Reactivated student ${selectedStudent.id} restored to whatsapp broadcasts.`, selectedStudent.branch);
-                      triggerWhatsappAlert(`🎉 Whatsapp Alert to ${selectedStudent.parentName} (${selectedStudent.mobile}): Welcome back! Student ${selectedStudent.name} (${selectedStudent.id}) reactivation complete. All services and portal access restored.`);
-                      alert('Student reactivated successfully!');
-                    }
+                    alert(`Manual reactivation is now governed by the backend billing flow. Clear the outstanding balance using a payment entry and the system will reactivate the student automatically.`);
                   }}
                   className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-slate-950 font-bold text-xs transition-all shadow"
                 >
-                  Verify & Reactivate Block
+                  Reactivation Via Ledger Only
+                </button>
+              )}
+
+              {selectedStudent.status === 'ACTIVE' && canPerform(['OWNER', 'MANAGER']) && (
+                <button
+                  onClick={() => {
+                    void suspendStudent(selectedStudent);
+                  }}
+                  className="flex-1 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-all shadow"
+                >
+                  Suspend Student
                 </button>
               )}
               
@@ -2006,9 +2064,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     if (confirm(`Are you sure you want to delete ${selectedStudent.name}?`)) {
-                      setStudents(prev => prev.filter(s => s.id !== selectedStudent.id));
-                      logAudit('STUDENT_DELETE', `Deleted student record ${selectedStudent.name} (${selectedStudent.id})`, selectedStudent.branch);
-                      setSelectedStudent(null);
+                      void deleteStudent(selectedStudent);
                     }
                   }}
                   className="p-2.5 rounded-lg bg-red-950/20 border border-red-500/20 text-red-400 hover:bg-red-900/30 text-xs transition-all"
