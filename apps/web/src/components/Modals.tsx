@@ -1,4 +1,5 @@
 import { Clock, MessageSquare, X } from 'lucide-react';
+import type React from 'react';
 import type {
   AttendanceStatus,
   Branch,
