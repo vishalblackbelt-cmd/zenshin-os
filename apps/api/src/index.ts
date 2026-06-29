@@ -1,7 +1,15 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import app from './app.js';
 import { assertRequiredEnv } from './config.js';
 import { startCronScheduler } from './services/cron.js';
+
+const rootEnvPath = path.resolve(__dirname, '../../../.env');
+
+if (existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+}
 
 assertRequiredEnv(['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET']);
 
