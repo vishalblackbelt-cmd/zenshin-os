@@ -3,6 +3,7 @@ export type Branch = 'Sirifort' | 'Asiad';
 export type TrialStatus = 'NEW' | 'PAID' | 'TRIAL_COMPLETED' | 'JOINED' | 'LOST';
 export type StudentStatus = 'ACTIVE' | 'INACTIVE';
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE';
+export type ThemeMode = 'dark' | 'red';
 
 export interface UserSession {
   id: string;
@@ -93,6 +94,55 @@ export interface UserFormState {
   branch: Branch;
 }
 
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+export interface CreateStudentInput {
+  name: string;
+  age: number;
+  category: string;
+  parentName: string;
+  mobile: string;
+  branchName: Branch;
+  currentBelt: string;
+  feeDueDate: string;
+}
+
+export interface CreateTrialInput {
+  name: string;
+  mobile: string;
+  branchName: Branch;
+  payMandatory: 'yes' | 'no';
+}
+
+export interface CreateLedgerEntryInput {
+  studentId: string;
+  type: 'CHARGE' | 'PAYMENT';
+  amount: number;
+  description: string;
+}
+
+export interface AttendanceRecordInput {
+  studentId: string;
+  status: AttendanceStatus;
+}
+
+export interface AttendanceSubmissionInput {
+  date: string;
+  batch: string;
+  records: AttendanceRecordInput[];
+}
+
+export interface UserAccountInput {
+  name: string;
+  email: string;
+  role: Role;
+  branchName: Branch | null;
+  password?: string;
+}
+
 export interface DashboardStats {
   total: number;
   active: number;
@@ -108,3 +158,9 @@ export interface DashboardStats {
 }
 
 export type AppTab = 'dashboard' | 'students' | 'attendance' | 'trials' | 'billing' | 'users' | 'audit';
+
+export interface NavigationTabConfig {
+  id: AppTab;
+  label: string;
+  privileged?: boolean;
+}

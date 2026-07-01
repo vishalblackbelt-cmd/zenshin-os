@@ -4,6 +4,7 @@ import type { Branch, SystemSettings, UserSession } from '../types';
 interface ShellHeaderProps {
   currentSession: UserSession;
   activeBranch: Branch;
+  availableBranches: Branch[];
   theme: 'dark' | 'red';
   settings: SystemSettings;
   onToggleTheme: () => void;
@@ -14,6 +15,7 @@ interface ShellHeaderProps {
 export function ShellHeader({
   currentSession,
   activeBranch,
+  availableBranches,
   theme,
   settings,
   onToggleTheme,
@@ -52,7 +54,7 @@ export function ShellHeader({
           )}
 
           <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] p-1 rounded-lg border border-[var(--border-muted)]">
-            {(['Sirifort', 'Asiad'] as Branch[]).map((branch) => {
+            {availableBranches.map((branch) => {
               const isLocked = currentSession.role === 'MANAGER' && currentSession.branch !== branch;
               return (
                 <button
