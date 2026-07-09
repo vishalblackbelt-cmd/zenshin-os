@@ -3,6 +3,7 @@ import { prisma } from '../db.js';
 import { AuthenticatedRequest, requireRole, requireBranchAccess } from '../middleware/auth.js';
 import { LedgerEntryType, StudentStatus } from '@zenshin/db';
 import { sendWhatsAppMessage } from '../services/whatsapp.js';
+import { Prisma } from '@zenshin/db';
 
 const router = Router();
 
@@ -46,10 +47,14 @@ router.post('/ledger', requireRole(['OWNER', 'MANAGER']), requireBranchAccess, a
       return res.status(404).json({ error: 'Student not found' });
     }
 
+    if (req.user!.role === 'MANAGER' && req.user!.branchId && req.user!.branchId !== student.branchId) {
+      return res.status(403).json({ error: 'Managers can only post ledger entries for students in their own branch' });
+    }
+
     const ledgerVal = type === 'CHARGE' ? LedgerEntryType.CHARGE : LedgerEntryType.PAYMENT;
     const ledgerAmount = parseInt(amount);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Create ledger entry
       const entry = await tx.ledgerEntry.create({
         data: {

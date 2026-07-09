@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+export * from '@prisma/client'; // This exports Role, AttendanceStatus, etc.
 
 export const prisma = new PrismaClient();
-export * from '@prisma/client';
+export default prisma;

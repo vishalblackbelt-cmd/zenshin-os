@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../db.js';
 import { AuthenticatedRequest, requireRole, requireBranchAccess } from '../middleware/auth.js';
 import { AttendanceStatus } from '@zenshin/db';
+import { Prisma } from '@zenshin/db';
 
 const router = Router();
 
@@ -41,7 +42,7 @@ router.post('/', requireRole(['OWNER', 'MANAGER', 'INSTRUCTOR']), requireBranchA
     const attendanceDate = new Date(date);
     attendanceDate.setHours(0, 0, 0, 0);
 
-    const loggedRecords = await prisma.$transaction(async (tx) => {
+    const loggedRecords = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const results = [];
 
       for (const record of records) {

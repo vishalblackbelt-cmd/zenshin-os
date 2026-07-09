@@ -4,7 +4,7 @@ echo ==================================================
 echo         STARTING ZENSHIN OS v1.3 RC-1...
 echo ==================================================
 echo.
-cd /d "C:\Users\Gurudev\.gemini\antigravity\scratch\zenshin-os"
+cd /d "%~dp0"
 echo [1/2] Starting Backend & Frontend Servers...
 start "Zenshin OS Server Panel" cmd /k "npm run dev"
 echo.

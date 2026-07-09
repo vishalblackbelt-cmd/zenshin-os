@@ -4,6 +4,8 @@ ZENSHIN OS is a multi-tenant Enterprise Resource Planning (ERP) platform designe
 
 It implements a unified membership directory, class attendance registers, a trial lead conversion funnel, accounting ledgers, and an automated Financial Discipline Engine.
 
+Operationally, the platform now uses the backend as the source of truth for core workflows: authentication, student enrollment, trials, attendance, billing, audit history, and privileged user administration.
+
 ## Tech Stack
 - **Frontend**: React 19, Vite, Tailwind CSS, Lucide Icons
 - **Backend**: Node.js 22, Express, TypeScript, Prisma ORM, node-cron
@@ -26,22 +28,34 @@ npm install --legacy-peer-deps
 ```
 
 ### 3. Environment Configuration
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory (single source of truth for local development):
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/zenshin?schema=public"
 JWT_SECRET="your_jwt_secret"
 JWT_REFRESH_SECRET="your_jwt_refresh_secret"
+DEFAULT_SEED_PASSWORD="set_a_dev_only_seed_password"
+CORS_ORIGIN="http://localhost:3000"
+VITE_API_BASE_URL="http://localhost:4000"
 PORT=4000
 NODE_ENV=development
 ```
 
+Do not create separate `.env` files in workspace folders. Keep all local runtime values in the root `.env`.
+
 ### 4. Database Setup & Seeding
 Verify and generate the Prisma Client:
 ```bash
-# Go to packages/db
-cd packages/db
-npx prisma generate
+npm run generate -w packages/db
 ```
+
+For the complete DB runbook (daily dev flow, schema-change sequence, and production release sequence), see [packages/db/README.md](packages/db/README.md).
+
+Create a migration when the Prisma schema changes in development:
+```bash
+npm run db:migrate:dev -w apps/api -- --name <migration_name>
+```
+
+The API dev startup now applies committed migrations with `prisma migrate deploy` before booting the watcher. That means the database is migration-based rather than schema-pushed.
 
 ### 5. Running the Application Locally
 To run both backend API and React frontend simultaneously:
@@ -51,9 +65,17 @@ npm run dev
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:4000
 
+In development mode, the API startup automatically runs committed Prisma migrations (`prisma migrate deploy`) before launching the server watcher, so first-time runs do not fail with missing table errors during seeding.
+If `DEFAULT_SEED_PASSWORD` is set, development seed accounts are created for `owner@zenshin.com`, `sirifort@zenshin.com`, `asiad@zenshin.com`, and `instructor@zenshin.com` using that password.
+
+### 6. User Administration
+- `OWNER` accounts can create and manage owner, manager, instructor, parent, and student login accounts across branches.
+- `MANAGER` accounts can manage instructor, parent, and student login accounts within their own branch.
+- Password resets and account deletion are available from the frontend `User Admin` tab and enforced again by backend RBAC.
+
 ---
 
-## Running with Docker Compose
+## Running with Docker Compose (Production-style)
 To build and launch the entire stack (Postgres database, API server, and web frontend):
 ```bash
 docker-compose up --build
@@ -62,6 +84,34 @@ The application will be accessible at:
 - **Frontend**: http://localhost
 - **Backend API**: http://localhost:4000
 
+This mode is production-style: the web app is served by Nginx and the API runs compiled output. It does **not** provide frontend HMR or backend watch reload.
+On startup, the API container applies the committed Prisma migrations before launching the server, so the database stays aligned with the checked-in schema history.
+The API waits for PostgreSQL readiness before booting and reads JWT/CORS/seed settings from the root `.env` file.
+
+---
+
+## Running with Docker Compose (Development + Hot Reload)
+Use the dev override file when you want live code reload in containers:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+The application will be accessible at:
+- **Frontend (Vite HMR)**: http://localhost:3000
+- **Backend API**: http://localhost:4000
+
+The `docker-compose.dev.yml` override is optional, but necessary if you want containerized development behavior (watch mode + HMR). If you do not need Docker for development, use `npm run dev` locally.
+
+The dev override uses dedicated development images for API and Web plus separate `node_modules` volumes per service to avoid dependency corruption/race conditions during startup.
+
+The API dev container also applies committed Prisma migrations automatically before boot to prevent Prisma `P2021` table-not-found errors during seed initialization.
+
+If you previously built old images/volumes and still see Prisma/OpenSSL errors, reset and rebuild:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
 ---
 
 ## Running Automated Tests
@@ -69,6 +119,12 @@ The integration test suite tests authentication, RBAC access controls, billing l
 ```bash
 # Run tests inside the api workspace
 npm run test -w apps/api
+```
+
+For a production-style verification pass, run the same checks used in CI:
+```bash
+npm run build --workspaces --if-present
+npm audit --workspaces --omit=dev
 ```
 
 ---

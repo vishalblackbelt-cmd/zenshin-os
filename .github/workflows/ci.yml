@@ -21,21 +21,18 @@ jobs:
         cache: 'npm'
 
     - name: Install Monorepo Dependencies
-      run: npm install --legacy-peer-deps
+      run: npm ci
 
     - name: Validate Prisma Schema
       run: |
         cd packages/db
         DATABASE_URL="postgresql://postgres:postgres@localhost:5432/zenshin" npx prisma validate
 
-    - name: Build DB Package
-      run: npm run build -w packages/db
-
-    - name: Build API Package
-      run: npm run build -w apps/api
-
-    - name: Build Web Application
-      run: npm run build -w apps/web
-
     - name: Run Integration Tests
       run: npm run test -w apps/api
+
+    - name: Build Workspace Packages
+      run: npm run build --workspaces --if-present
+
+    - name: Audit Production Dependencies
+      run: npm audit --workspaces --omit=dev

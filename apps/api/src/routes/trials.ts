@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../db.js';
 import { AuthenticatedRequest, requireRole, requireBranchAccess } from '../middleware/auth.js';
 import { TrialStatus } from '@zenshin/db';
+import { Prisma } from '@zenshin/db';
 
 const router = Router();
 
@@ -47,10 +48,14 @@ router.post('/', requireRole(['OWNER', 'MANAGER']), requireBranchAccess, async (
       return res.status(400).json({ error: 'Invalid branch name specified' });
     }
 
+    if (req.user!.role === 'MANAGER' && req.user!.branchId && req.user!.branchId !== branch.id) {
+      return res.status(403).json({ error: 'Managers can only create trial leads in their own branch' });
+    }
+
     const status = payMandatory === 'yes' ? TrialStatus.PAID : TrialStatus.NEW;
     const paidAmount = payMandatory === 'yes' ? 500 : 0;
 
-    const lead = await prisma.$transaction(async (tx) => {
+    const lead = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const created = await tx.trialLead.create({
         data: {
           name,
@@ -100,7 +105,7 @@ router.put('/:id/status', requireRole(['OWNER', 'MANAGER']), async (req: Authent
       return res.status(400).json({ error: 'Lead cannot convert to JOINED. The ₹500 mandatory trial fee must be PAID first!' });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       let paidAmount = lead.paidAmount;
       if (status === 'PAID') {
         paidAmount = 500;

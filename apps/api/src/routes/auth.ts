@@ -1,13 +1,11 @@
 import { Router, Response } from 'express';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../db.js';
+import { getOptionalEnv, getRequiredEnv } from '../config.js';
 import { AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
-
-const JWT_SECRET = process.env.JWT_SECRET || 'zenshin_secret_key_12345';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'zenshin_refresh_secret_key_12345';
 
 // Initialize branches and default admin user if they don't exist
 export async function seedInitialDatabase() {
@@ -25,42 +23,63 @@ export async function seedInitialDatabase() {
       create: { name: 'Asiad' }
     });
 
-    // 2. Seed owner
-    const existingOwner = await prisma.user.findFirst({
-      where: { role: 'OWNER' }
-    });
+    const seedPassword = getOptionalEnv('DEFAULT_SEED_PASSWORD');
 
-    if (!existingOwner) {
-      const hashedPassword = await bcrypt.hash('password123', 10);
-      await prisma.user.create({
-        data: {
+    if (seedPassword) {
+      const hashedPassword = await bcrypt.hash(seedPassword, 10);
+      const defaultUsers = [
+        {
           email: 'owner@zenshin.com',
-          name: 'Shihan Vishal jaiswal',
-          password: hashedPassword,
-          role: 'OWNER',
-          branchId: null
-        }
-      });
-      console.log('[Seeding] Created default owner: owner@zenshin.com / password123');
-    }
-
-    // 3. Seed manager for Sirifort
-    const existingManager = await prisma.user.findFirst({
-      where: { role: 'MANAGER', branchId: sirifort.id }
-    });
-
-    if (!existingManager) {
-      const hashedPassword = await bcrypt.hash('password123', 10);
-      await prisma.user.create({
-        data: {
+          name: 'Shihan Vishal Jaiswal',
+          role: 'OWNER' as const,
+          branchId: null,
+          label: 'default owner'
+        },
+        {
           email: 'sirifort@zenshin.com',
           name: 'Anjali Sen',
-          password: hashedPassword,
-          role: 'MANAGER',
-          branchId: sirifort.id
+          role: 'MANAGER' as const,
+          branchId: sirifort.id,
+          label: 'default Sirifort manager'
+        },
+        {
+          email: 'asiad@zenshin.com',
+          name: 'Rahul Kapoor',
+          role: 'MANAGER' as const,
+          branchId: asiad.id,
+          label: 'default Asiad manager'
+        },
+        {
+          email: 'instructor@zenshin.com',
+          name: 'Meera Bhatia',
+          role: 'INSTRUCTOR' as const,
+          branchId: sirifort.id,
+          label: 'default instructor'
         }
-      });
-      console.log('[Seeding] Created Sirifort manager: sirifort@zenshin.com / password123');
+      ];
+
+      for (const defaultUser of defaultUsers) {
+        const existingUser = await prisma.user.findUnique({
+          where: { email: defaultUser.email }
+        });
+
+        if (existingUser) {
+          continue;
+        }
+
+        await prisma.user.create({
+          data: {
+            email: defaultUser.email,
+            name: defaultUser.name,
+            password: hashedPassword,
+            role: defaultUser.role,
+            branchId: defaultUser.branchId
+          }
+        });
+        console.log(`[Seeding] Created ${defaultUser.label} account.`);
+      }
+    } else {
+      console.warn('[Seeding] DEFAULT_SEED_PASSWORD is not configured. Skipping default user creation.');
     }
 
     // 4. Seed system settings
@@ -89,6 +108,9 @@ router.post('/login', async (req: AuthenticatedRequest, res: Response) => {
   }
 
   try {
+    const jwtSecret = getRequiredEnv('JWT_SECRET');
+    const jwtRefreshSecret = getRequiredEnv('JWT_REFRESH_SECRET');
+
     const user = await prisma.user.findUnique({
       where: { email },
       include: { branch: true }
@@ -111,8 +133,8 @@ router.post('/login', async (req: AuthenticatedRequest, res: Response) => {
       branchId: user.branchId
     };
 
-    const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
-    const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+    const accessToken = jwt.sign(payload, jwtSecret, { expiresIn: '15m' });
+    const refreshToken = jwt.sign(payload, jwtRefreshSecret, { expiresIn: '7d' });
 
     // Log login audit event
     await prisma.auditLog.create({
@@ -150,7 +172,17 @@ router.post('/refresh', (req: AuthenticatedRequest, res: Response) => {
     return res.status(400).json({ error: 'Refresh token required' });
   }
 
-  jwt.verify(refreshToken, JWT_REFRESH_SECRET, (err: any, decoded: any) => {
+  let jwtSecret: string;
+  let jwtRefreshSecret: string;
+
+  try {
+    jwtSecret = getRequiredEnv('JWT_SECRET');
+    jwtRefreshSecret = getRequiredEnv('JWT_REFRESH_SECRET');
+  } catch {
+    return res.status(500).json({ error: 'Server authentication is not configured' });
+  }
+
+  jwt.verify(refreshToken, jwtRefreshSecret, (err: any, decoded: any) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired refresh token' });
     }
@@ -162,7 +194,7 @@ router.post('/refresh', (req: AuthenticatedRequest, res: Response) => {
       branchId: decoded.branchId
     };
 
-    const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
+    const accessToken = jwt.sign(payload, jwtSecret, { expiresIn: '15m' });
     res.json({ accessToken });
   });
 });

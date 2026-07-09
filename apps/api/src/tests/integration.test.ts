@@ -1,3 +1,5 @@
+/// <reference types="jest" />
+
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../app.js';
@@ -7,15 +9,21 @@ import { sendWhatsAppMessage } from '../services/whatsapp.js';
 
 // Mock the Prisma client
 jest.mock('../db.js', () => {
-  const mockPrisma: any = {
+  const mockPrisma: Record<string, any> = {};
+
+  Object.assign(mockPrisma, {
     user: {
       findUnique: jest.fn(),
       findFirst: jest.fn().mockResolvedValue(true),
+      findMany: jest.fn(),
+      count: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
       create: jest.fn(),
     },
     branch: {
       findUnique: jest.fn(),
-      upsert: jest.fn().mockImplementation((args) => {
+      upsert: jest.fn().mockImplementation((args: { create?: { name?: string } }) => {
         return Promise.resolve({
           id: args?.create?.name === 'Asiad' ? 'asiad-id' : 'sirifort-id',
           name: args?.create?.name || 'Sirifort'
@@ -48,13 +56,17 @@ jest.mock('../db.js', () => {
       create: jest.fn(),
       findMany: jest.fn(),
     },
-    $transaction: jest.fn((arg: any): any => {
+    $transaction: jest.fn((arg: unknown): Promise<unknown> | unknown => {
       if (typeof arg === 'function') {
-        return arg(mockPrisma);
+        return (arg as (tx: Record<string, any>) => unknown)(mockPrisma);
       }
-      return Promise.all(arg);
+      if (Array.isArray(arg)) {
+        return Promise.all(arg);
+      }
+      return Promise.resolve(arg);
     }),
-  };
+  });
+
   return { prisma: mockPrisma };
 });
 
@@ -63,7 +75,7 @@ jest.mock('../services/whatsapp.js', () => ({
   sendWhatsAppMessage: jest.fn().mockResolvedValue(true),
 }));
 
-const JWT_SECRET = process.env.JWT_SECRET || 'zenshin_secret_key_12345';
+const JWT_SECRET = 'test-jwt-secret';
 
 describe('ZENSHIN OS Integration Test Suite', () => {
   let ownerToken: string;
@@ -71,6 +83,9 @@ describe('ZENSHIN OS Integration Test Suite', () => {
   let studentToken: string;
 
   beforeAll(() => {
+    process.env.JWT_SECRET = JWT_SECRET;
+    process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret';
+
     // Generate mock tokens
     ownerToken = jwt.sign({ id: 'owner-id', email: 'owner@zenshin.com', role: 'OWNER', branchId: null }, JWT_SECRET);
     managerToken = jwt.sign({ id: 'manager-id', email: 'manager@zenshin.com', role: 'MANAGER', branchId: 'sirifort-id' }, JWT_SECRET);
@@ -126,6 +141,37 @@ describe('ZENSHIN OS Integration Test Suite', () => {
       expect(managerRes.status).toBe(200);
       // Verify query is directed to Sirifort
       expect(prisma.branch.findUnique).toHaveBeenCalledWith({ where: { id: 'sirifort-id' } });
+    });
+
+    it('should allow managers to list only their branch users', async () => {
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+
+      const managerRes = await request(app)
+        .get('/api/users')
+        .set('Authorization', `Bearer ${managerToken}`);
+
+      expect(managerRes.status).toBe(200);
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: {
+          branchId: 'sirifort-id',
+          role: { not: 'OWNER' }
+        }
+      }));
+    });
+
+    it('should block managers from creating manager accounts', async () => {
+      const res = await request(app)
+        .post('/api/users')
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({
+          email: 'new.manager@zenshin.com',
+          name: 'New Manager',
+          password: 'securepass123',
+          role: 'MANAGER'
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('You are not allowed to create this role.');
     });
   });
 
